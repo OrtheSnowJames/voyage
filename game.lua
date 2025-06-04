@@ -33,16 +33,18 @@ local gameState = {
     combat = {
         is_active = false,
         zoom_progress = 0,
-        zoom_duration = 1.0,  -- 1 second zoom animation
+        zoom_duration = 2.0,  -- 2 seconds for zoom animation
         target_zoom = 2.0,    -- zoom in 2x for combat
         enemy = nil,          -- store enemy data during combat
-        result_display_time = 0,  -- time to display combat results
+        result_display_time = 3.0,  -- time to display combat results
         result = nil,         -- store combat results
+        is_fully_zoomed = false,  -- new flag to track zoom completion
         defeat_flash = {
             active = false,
             alpha = 0,
-            duration = 2.0,   -- 2 seconds to fade to white
-            timer = 0
+            duration = 3.0,   -- 3 seconds to fade to white
+            timer = 0,
+            text_display_time = 2.0  -- Show defeat text for 2 seconds before flash
         }
     }
 }
@@ -366,17 +368,34 @@ function camera:goto(x, y)
 end
 
 -- Zooms the camera, keeping the center stable
-function camera:zoom(factor)
+function camera:zoom(factor, target_x, target_y)
     local oldScale = self.scale
     self.scale = self.scale * factor
 
-    -- Adjust position to keep center in place
+    -- If target coordinates provided, adjust position to keep that point centered
+    if target_x and target_y then
+        local screen_width = love.graphics.getWidth()
+        local screen_height = love.graphics.getHeight()
+        
+        -- Calculate screen center
+        local center_x = screen_width / 2
+        local center_y = screen_height / 2
+        
+        -- Calculate the difference between target point and center in world coordinates
+        local dx = (target_x * oldScale - center_x) / oldScale - (target_x * self.scale - center_x) / self.scale
+        local dy = (target_y * oldScale - center_y) / oldScale - (target_y * self.scale - center_y) / self.scale
+        
+        self.x = self.x + dx
+        self.y = self.y + dy
+    else
+        -- If no target, keep screen center stable (old behavior)
     local mx, my = love.graphics.getWidth() / 2, love.graphics.getHeight() / 2
     local dx = mx / oldScale - mx / self.scale
     local dy = my / oldScale - my / self.scale
 
     self.x = self.x + dx
     self.y = self.y + dy
+    end
 end
 
 function game.load()
@@ -586,58 +605,57 @@ function game.toggleDebug()
 end
 
 function game.update(dt)
-    -- Update day-night cycle
-    if not player_ship.time_system.is_sleeping then
-        player_ship.time_system.time = player_ship.time_system.time + dt
-        
-        -- Check if we've reached the end of the day (12 minutes)
-        if player_ship.time_system.time >= player_ship.time_system.DAY_LENGTH then
-            player_ship.time_system.time = 0
-            player_ship.time_system.is_fading = true
-            player_ship.time_system.fade_timer = 0
-            player_ship.time_system.fade_direction = "out"
-            print("Starting night transition...")
+    -- Update day-night cycle - only if not in combat
+    if not gameState.combat.is_active then
+        if not player_ship.time_system.is_sleeping then
+            player_ship.time_system.time = player_ship.time_system.time + dt
+            
+            -- Check if we've reached the end of the day (12 minutes)
+            if player_ship.time_system.time >= player_ship.time_system.DAY_LENGTH then
+                player_ship.time_system.time = 0
+                player_ship.time_system.is_fading = true
+                player_ship.time_system.fade_timer = 0
+                player_ship.time_system.fade_direction = "out"
+                print("Starting night transition...")
+            end
         end
     end
     
-    -- Handle fading and sleep state
-    if player_ship.time_system.is_fading then
-        player_ship.time_system.fade_timer = player_ship.time_system.fade_timer + dt
-        
-        if player_ship.time_system.fade_direction == "out" then
-            -- Fading to black
-            player_ship.time_system.fade_alpha = math.min(1, player_ship.time_system.fade_timer / player_ship.time_system.FADE_DURATION)
-            print("Fading to black: " .. player_ship.time_system.fade_alpha)
+    -- Handle fading and sleep state - only if not in combat
+    if not gameState.combat.is_active then
+        if player_ship.time_system.is_fading then
+            player_ship.time_system.fade_timer = player_ship.time_system.fade_timer + dt
             
-            if player_ship.time_system.fade_timer >= player_ship.time_system.FADE_DURATION then
-                -- Start sleep
-                player_ship.time_system.is_sleeping = true
-                player_ship.time_system.sleep_timer = 0
-                player_ship.time_system.fade_direction = "wait"
-                player_ship.time_system.fade_timer = 0  -- Reset timer for next phase
-                during_sleep()
-                print("Starting sleep...")
-            end
-        elseif player_ship.time_system.fade_direction == "wait" then
-            -- During sleep
-            player_ship.time_system.sleep_timer = player_ship.time_system.sleep_timer + dt
-            if player_ship.time_system.sleep_timer >= player_ship.time_system.SLEEP_DURATION then
-                -- Start waking up
-                player_ship.time_system.fade_direction = "in"
-                player_ship.time_system.fade_timer = 0  -- Reset timer for fade in
-                print("Starting wake up...")
-            end
-        elseif player_ship.time_system.fade_direction == "in" then
-            -- Fading back in
-            player_ship.time_system.fade_alpha = math.max(0, 1 - (player_ship.time_system.fade_timer / player_ship.time_system.FADE_DURATION))
-            print("Fading back in: " .. player_ship.time_system.fade_alpha)
-            
-            if player_ship.time_system.fade_timer >= player_ship.time_system.FADE_DURATION then
-                -- Finish waking up
-                player_ship.time_system.is_fading = false
-                player_ship.time_system.is_sleeping = false
-                player_ship.time_system.fade_alpha = 0
-                print("Fully awake!")
+            if player_ship.time_system.fade_direction == "out" then
+                -- Fading to black
+                player_ship.time_system.fade_alpha = math.min(1, player_ship.time_system.fade_timer / player_ship.time_system.FADE_DURATION)
+                
+                if player_ship.time_system.fade_timer >= player_ship.time_system.FADE_DURATION then
+                    -- Start sleep
+                    player_ship.time_system.is_sleeping = true
+                    player_ship.time_system.sleep_timer = 0
+                    player_ship.time_system.fade_direction = "wait"
+                    player_ship.time_system.fade_timer = 0  -- Reset timer for next phase
+                    during_sleep()
+                end
+            elseif player_ship.time_system.fade_direction == "wait" then
+                -- During sleep
+                player_ship.time_system.sleep_timer = player_ship.time_system.sleep_timer + dt
+                if player_ship.time_system.sleep_timer >= player_ship.time_system.SLEEP_DURATION then
+                    -- Start waking up
+                    player_ship.time_system.fade_direction = "in"
+                    player_ship.time_system.fade_timer = 0  -- Reset timer for fade in
+                end
+            elseif player_ship.time_system.fade_direction == "in" then
+                -- Fading back in
+                player_ship.time_system.fade_alpha = math.max(0, 1 - (player_ship.time_system.fade_timer / player_ship.time_system.FADE_DURATION))
+                
+                if player_ship.time_system.fade_timer >= player_ship.time_system.FADE_DURATION then
+                    -- Finish waking up
+                    player_ship.time_system.is_fading = false
+                    player_ship.time_system.is_sleeping = false
+                    player_ship.time_system.fade_alpha = 0
+                end
             end
         end
     end
@@ -647,19 +665,66 @@ function game.update(dt)
         return "menu"
     end
 
-    local moveSpeed = 200 * dt
+    -- Only update game elements if not sleeping and not in combat
+    if not player_ship.time_system.is_sleeping and not gameState.combat.is_active then
+        -- Update ship
+        player_ship:update(dt)
+        
+        -- Update ship animation
+        update_ship_animation(dt)
+        
+        -- Update catch texts
+        update_catch_texts(dt)
+        
+        -- Update shopkeeper position
+        shopkeeper:update(player_ship.x, player_ship.y)
+        
+        -- Update shop
+        local new_state = shop.update(gameState, player_ship, shopkeeper)
+        if new_state then
+            return new_state
+        end
 
-    -- Only update game elements if not sleeping
-    if not player_ship.time_system.is_sleeping then
-        -- Handle combat state first
-        if gameState.combat.is_active then
-            -- Update zoom animation
-            gameState.combat.zoom_progress = math.min(1, gameState.combat.zoom_progress + dt / gameState.combat.zoom_duration)
-            camera.scale = 1 + (gameState.combat.target_zoom - 1) * gameState.combat.zoom_progress
+        -- Update enemy spawning and movement
+        spawnenemy.update(dt, camera, player_ship.x, player_ship.y)
 
-            -- If zoom is complete and we haven't processed combat yet
-            if gameState.combat.zoom_progress >= 1 and not gameState.combat.result then
-                -- Process combat
+        -- Check for collision with enemies
+        local collided_enemy = spawnenemy.check_collision(player_ship.x, player_ship.y, player_ship.radius)
+        if collided_enemy then
+            -- Start combat
+            gameState.combat.is_active = true
+            gameState.combat.zoom_progress = 0
+            gameState.combat.enemy = collided_enemy
+            gameState.combat.result = nil
+            gameState.combat.is_fully_zoomed = false
+            gameState.combat.result_display_time = 3.0  -- Reset display time
+        end
+
+        -- Some Mechs
+        fish(dt)
+
+        ripples:update(dt)
+    end
+    
+    -- Handle combat state
+    if gameState.combat.is_active then
+        -- Update zoom animation
+        gameState.combat.zoom_progress = math.min(1, gameState.combat.zoom_progress + dt / gameState.combat.zoom_duration)
+        local zoom_factor = 1 + (gameState.combat.target_zoom - 1) * gameState.combat.zoom_progress
+        
+        -- Calculate center point between player and enemy
+        local center_x = (player_ship.x + gameState.combat.enemy.x) / 2
+        local center_y = (player_ship.y + gameState.combat.enemy.y) / 2
+        
+        -- Apply zoom with target point
+        camera:zoom(zoom_factor / camera.scale, center_x, center_y)
+        
+        -- Check if zoom is complete
+        if gameState.combat.zoom_progress >= 1 then
+            if not gameState.combat.is_fully_zoomed then
+                gameState.combat.is_fully_zoomed = true
+                
+                -- Process combat only when zoom is complete
                 local enemy = gameState.combat.enemy
                 local result = combat.combat(player_ship.men, enemy.size, 
                     combat.get_sword_level(player_ship.sword),
@@ -669,9 +734,8 @@ function game.update(dt)
                 if result.victory then
                     player_ship.men = player_ship.men - result.casualties
                     player_ship.fainted_men = player_ship.fainted_men + result.fainted
-                    -- Store result for normal display
                     gameState.combat.result = result
-                    gameState.combat.result_display_time = 2.0  -- Show result for 2 seconds
+                    gameState.combat.result_display_time = 3.0  -- Reset display time for victory
                 else
                     -- Defeat handling
                     gameState.combat.result = result
@@ -680,26 +744,34 @@ function game.update(dt)
                     gameState.combat.defeat_flash.timer = 0
                 end
             end
+        end
 
-            -- Update result display timer and handle defeat
-            if gameState.combat.result then
-                if gameState.combat.result.victory then
-                    -- Normal victory handling
+        -- Update result display timer and handle defeat
+        if gameState.combat.result then
+            if gameState.combat.result.victory then
+                -- Normal victory handling
+                if gameState.combat.result_display_time > 0 then  -- Only count down if time remains
                     gameState.combat.result_display_time = gameState.combat.result_display_time - dt
                     if gameState.combat.result_display_time <= 0 then
-                        -- End combat
+                        -- Remove the enemy and end combat
+                        spawnenemy.remove_enemy(gameState.combat.enemy)
                         gameState.combat.is_active = false
                         gameState.combat.zoom_progress = 0
+                        gameState.combat.is_fully_zoomed = false
                         gameState.combat.result = nil
                         camera.scale = 1
                     end
-                else
-                    -- Defeat flash handling
-                    if gameState.combat.defeat_flash.active then
-                        gameState.combat.defeat_flash.timer = gameState.combat.defeat_flash.timer + dt
-                        
-                        -- Simple fade in to white
-                        gameState.combat.defeat_flash.alpha = math.min(1, gameState.combat.defeat_flash.timer / gameState.combat.defeat_flash.duration)
+                end
+            else
+                -- Defeat flash handling
+                if gameState.combat.defeat_flash.active then
+                    gameState.combat.defeat_flash.timer = gameState.combat.defeat_flash.timer + dt
+                    
+                    -- Show text for text_display_time seconds before starting flash
+                    if gameState.combat.defeat_flash.timer >= gameState.combat.defeat_flash.text_display_time then
+                        -- Calculate flash alpha only after text display time
+                        local flash_time = gameState.combat.defeat_flash.timer - gameState.combat.defeat_flash.text_display_time
+                        gameState.combat.defeat_flash.alpha = math.min(1, flash_time / gameState.combat.defeat_flash.duration)
                         
                         -- When fully white, reset game
                         if gameState.combat.defeat_flash.alpha >= 1 then
@@ -709,47 +781,26 @@ function game.update(dt)
                     end
                 end
             end
-        else
-            -- Only update these when not in combat
-            -- Update ship
-            player_ship:update(dt)
-            
-            -- Update ship animation
-            update_ship_animation(dt)
-            
-            -- Update catch texts
-            update_catch_texts(dt)
-            
-            -- Update shopkeeper position
-            shopkeeper:update(player_ship.x, player_ship.y)
-            
-            -- Update shop
-            local new_state = shop.update(gameState, player_ship, shopkeeper)
-            if new_state then
-                return new_state
-            end
-
-            -- Update enemy spawning and movement
-            spawnenemy.update(dt, camera, player_ship.x, player_ship.y)
-
-            -- Check for collision with enemies
-            local collided_enemy = spawnenemy.check_collision(player_ship.x, player_ship.y, player_ship.radius)
-            if collided_enemy then
-                -- Start combat
-                gameState.combat.is_active = true
-                gameState.combat.zoom_progress = 0
-                gameState.combat.enemy = collided_enemy
-                gameState.combat.result = nil
-            end
-
-            -- Some Mechs
-            fish(dt)
-
-            ripples:update(dt)
         end
+    end
+    
+    -- Always update camera to follow ship or combat center
+    if gameState.combat.is_active then
+        -- During combat, camera should focus on the center point between player and enemy
+        local center_x = (player_ship.x + gameState.combat.enemy.x) / 2
+        local center_y = (player_ship.y + gameState.combat.enemy.y) / 2
         
-        -- Always update camera to follow ship, even during combat
-        camera:goto(player_ship.x - love.graphics.getWidth()/2, player_ship.y - love.graphics.getHeight()/2)
+        -- Adjust for screen center
+        camera:goto(
+            center_x - love.graphics.getWidth()/(2 * camera.scale),
+            center_y - love.graphics.getHeight()/(2 * camera.scale)
+        )
+    else
+        -- Normal camera following during gameplay
+        camera:goto(
+            player_ship.x - love.graphics.getWidth()/2,
+            player_ship.y - love.graphics.getHeight()/2
+        )
     end
     
     return nil
@@ -800,9 +851,41 @@ function game.draw()
         -- Draw the shopkeeper
         shopkeeper:draw()
 
-        -- Draw enemy ships if not in combat
+        -- Draw enemy ships
         if not gameState.combat.is_active then
+            -- Draw all enemies normally when not in combat
             spawnenemy.draw()
+        else
+            -- During combat, only draw the enemy we're fighting
+            if gameState.combat.enemy then
+                love.graphics.setColor(1, 0, 0, 1)
+                
+                -- Save current transform
+                love.graphics.push()
+                
+                -- Move to enemy position and rotate based on direction
+                love.graphics.translate(gameState.combat.enemy.x, gameState.combat.enemy.y)
+                love.graphics.rotate(gameState.combat.enemy.direction > 0 and 0 or math.pi)  -- rotate if moving left
+                
+                -- Draw triangle
+                love.graphics.polygon("fill",
+                    gameState.combat.enemy.radius, 0,  -- front
+                    -gameState.combat.enemy.radius, -gameState.combat.enemy.radius/2,  -- back left
+                    -gameState.combat.enemy.radius, gameState.combat.enemy.radius/2    -- back right
+                )
+                
+                -- Restore transform before drawing text
+                love.graphics.pop()
+                
+                -- Draw crew size text (always upright)
+                love.graphics.setColor(1, 1, 1, 1)
+                local text = tostring(gameState.combat.enemy.size)
+                local font = love.graphics.getFont()
+                local text_width = font:getWidth(text)
+                love.graphics.print(text, 
+                    gameState.combat.enemy.x - text_width/2,
+                    gameState.combat.enemy.y - font:getHeight()/2)
+            end
         end
         
         -- Draw the ship with animation scale
@@ -821,25 +904,80 @@ function game.draw()
         
         love.graphics.pop()
 
-        -- Draw combat UI if active
+        -- Draw combat result text at top of screen
         if gameState.combat.is_active and gameState.combat.result then
             -- Draw combat result
             love.graphics.setColor(1, 1, 1, 1)
             local result_text
             if gameState.combat.result.victory then
-                result_text = string.format("Victory!\nLost: %d crew\nFainted: %d crew", 
-                    gameState.combat.result.casualties,
-                    gameState.combat.result.fainted)
+                if gameState.combat.result.farming_penalty then
+                    result_text = {
+                        "Overwhelming Victory!",
+                        "Your crew got careless...",
+                        string.format("Lost %d men to friendly fire!", gameState.combat.result.casualties)
+                    }
+                else
+                    result_text = {
+                        "Victory!",
+                        string.format("Lost: %d crew", gameState.combat.result.casualties),
+                        string.format("Fainted: %d crew", gameState.combat.result.fainted)
+                    }
+                end
             else
-                result_text = "Defeat!\nMost crew members lost!"
+                -- Only show defeat text before the flash starts
+                if gameState.combat.defeat_flash.timer < gameState.combat.defeat_flash.text_display_time then
+                    result_text = {
+                        "Defeat!",
+                        string.format("Lost all %d crew members!", player_ship.men)
+                    }
+                end
             end
             
-            -- Draw centered above player ship
-            local font = love.graphics.getFont()
-            local text_width = font:getWidth(result_text)
-            love.graphics.print(result_text, 
-                player_ship.x - text_width/2,
-                player_ship.y - 100)
+            -- Draw centered on screen with larger font
+            if result_text then
+                local font = love.graphics.getFont()
+                local scale = 2.0  -- Make text larger
+                
+                -- Calculate screen center
+                local screen_center_x = love.graphics.getWidth() / 2
+                local screen_center_y = love.graphics.getHeight() / 2
+                
+                -- Convert to world coordinates
+                local world_x = screen_center_x / camera.scale + camera.x
+                local world_y = screen_center_y / camera.scale + camera.y
+                
+                -- Calculate total height
+                local total_height = #result_text * font:getHeight()
+                
+                -- Draw text centered vertically
+                love.graphics.push()
+                love.graphics.scale(scale, scale)
+                
+                -- Start Y position (centered vertically)
+                local y_pos = (world_y - (total_height * scale / 2)) / scale
+                
+                -- Draw each line centered
+                for i, line in ipairs(result_text) do
+                    local width = font:getWidth(line)
+                    local x_pos = (world_x - (width * scale / 2)) / scale
+                    
+                    -- Make title (first line) bigger
+                    if i == 1 then
+                        love.graphics.push()
+                        love.graphics.scale(1.5, 1.5)  -- 50% bigger than the rest
+                        x_pos = (world_x - (width * scale * 1.5 / 2)) / (scale * 1.5)
+                        y_pos = (world_y - (total_height * scale / 2)) / (scale * 1.5)
+                        love.graphics.print(line, x_pos, y_pos)
+                        love.graphics.pop()
+                        y_pos = y_pos * 1.5 + font:getHeight() * 2  -- Add extra spacing after title
+                    else
+                        love.graphics.print(line, x_pos, y_pos)
+                        y_pos = y_pos + font:getHeight()
+                    end
+                end
+                
+                love.graphics.pop()
+            end
         end
         
         -- Draw catch texts

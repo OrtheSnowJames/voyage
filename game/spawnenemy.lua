@@ -7,6 +7,7 @@ local ENEMY_SIZE = 20   -- size of enemy ships
 local SPAWN_MARGIN = 100  -- spawn enemies slightly outside view
 local SHORE_DIVISION = 60  -- match the shore_division from game.lua
 local MIN_SHORE_DISTANCE = 40  -- minimum distance from shore (match player ship restriction)
+local SHOP_SAFE_DISTANCE = 50  -- minimum distance from shops for enemy spawns
 
 local enemies = {}  -- table to store active enemies
 local spawn_timer = 0
@@ -19,6 +20,28 @@ local function generate_enemy_size(player_y)
     
     -- random variation around base size
     return math.max(1, math.floor(base_size + math.random(-1, 2)))
+end
+
+-- Add helper function to check if a Y position is too close to shops
+local function is_near_shop(y)
+    -- Check main shopkeeper position (always at shore_division)
+    if math.abs(y - SHORE_DIVISION) <= SHOP_SAFE_DISTANCE then
+        return true
+    end
+    
+    -- Check port-a-shop positions (every 1000 units)
+    local shop_y = math.floor(y / 1000) * 1000
+    if math.abs(y - shop_y) <= SHOP_SAFE_DISTANCE then
+        return true
+    end
+    
+    -- Also check the next shop level up and down
+    if math.abs(y - (shop_y + 1000)) <= SHOP_SAFE_DISTANCE or
+       math.abs(y - (shop_y - 1000)) <= SHOP_SAFE_DISTANCE then
+        return true
+    end
+    
+    return false
 end
 
 function spawnenemy.update(dt, camera, player_x, player_y)
@@ -53,17 +76,29 @@ function spawnenemy.update(dt, camera, player_x, player_y)
         
         -- only spawn if there's valid space
         if max_y > min_y then
-            -- random Y position within valid range
-            local spawn_y = math.random(min_y, max_y)
+            -- Try to find a valid spawn position
+            local max_attempts = 10
+            local spawn_y = nil
             
-            -- create new enemy
-            table.insert(enemies, {
-                x = spawn_x,
-                y = spawn_y,
-                direction = direction,
-                size = generate_enemy_size(player_y),
-                radius = ENEMY_SIZE
-            })
+            for i = 1, max_attempts do
+                local test_y = math.random(min_y, max_y)
+                if not is_near_shop(test_y) then
+                    spawn_y = test_y
+                    break
+                end
+            end
+            
+            -- Only spawn if we found a valid position
+            if spawn_y then
+                -- create new enemy
+                table.insert(enemies, {
+                    x = spawn_x,
+                    y = spawn_y,
+                    direction = direction,
+                    size = generate_enemy_size(player_y),
+                    radius = ENEMY_SIZE
+                })
+            end
         end
     end
     
@@ -124,12 +159,20 @@ function spawnenemy.check_collision(player_x, player_y, player_radius)
         local distance = math.sqrt(dx * dx + dy * dy)
         
         if distance < (player_radius + enemy.radius) then
-            -- remove the enemy and return its data
-            local enemy_data = table.remove(enemies, i)
-            return enemy_data
+            -- Return enemy data without removing it
+            return enemy
         end
     end
     return nil
+end
+
+function spawnenemy.remove_enemy(enemy)
+    for i, e in ipairs(enemies) do
+        if e == enemy then
+            table.remove(enemies, i)
+            break
+        end
+    end
 end
 
 function spawnenemy.get_enemies()

@@ -55,6 +55,18 @@ function combat.combat(crew_size, enemy_size, sword_level, top_sword_level)
         }
     end
     
+    -- Check for farming penalty (10x or more crew than enemy)
+    if crew_size >= enemy_size * 10 then
+        -- Apply harsh penalty - lose 90% of crew
+        local casualties = math.floor(crew_size * 0.9)
+        return {
+            victory = true,
+            casualties = casualties,
+            fainted = 0,
+            farming_penalty = true  -- Flag to indicate this was a farming penalty
+        }
+    end
+    
     -- calculate base casualty rate based on enemy size ratio
     local enemy_ratio = enemy_size / crew_size
     
