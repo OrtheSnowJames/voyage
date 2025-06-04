@@ -14,6 +14,7 @@ To fish, press the `f` key. When the cooldown is done, all of your men will fish
   - If you have fewer men, you'll lose the fight and your save data
   - If you have more men, you'll lose some men but get fainted men
   - Fainted men can be healed by sleeping next to a shop
+  - **Warning**: If you bring 10x or more men than the enemy has, your crew will get careless and you'll lose 90% of them to friendly fire!
 
 ### Shop System
 The shop allows you to:
