@@ -64,11 +64,15 @@ local player_ship = {
     velocity_y = 0,
     rotation = 0,  -- current rotation in radians
     target_rotation = 0,  -- where the ship is trying to turn to
-    max_speed = 200,  -- maximum speed
+    
+    -- Movement configuration
+    max_speed = 200,  -- maximum speed in pixels per second
     acceleration = 50,  -- how quickly it speeds up
     deceleration = 30,  -- how quickly it slows down
     turn_speed = 2,  -- how quickly it can turn (radians per second)
     turn_penalty = 0.7,  -- speed multiplier when turning
+    reverse_multiplier = 0.5,  -- speed multiplier when reversing
+    
     radius = 20,
     color = {1, 1, 1, 1},
     rod = "Basic Rod",  -- moved from player
@@ -316,9 +320,9 @@ function player_ship:update(dt)
         accelerating = true
     end
     if love.keyboard.isDown("s") then
-        -- Brake/reverse
-        self.velocity_x = self.velocity_x - forward_x * self.acceleration * 0.5 * dt
-        self.velocity_y = self.velocity_y - forward_y * self.acceleration * 0.5 * dt
+        -- Brake/reverse with the configured multiplier
+        self.velocity_x = self.velocity_x - forward_x * self.acceleration * self.reverse_multiplier * dt
+        self.velocity_y = self.velocity_y - forward_y * self.acceleration * self.reverse_multiplier * dt
         accelerating = true
     end
     
@@ -517,9 +521,9 @@ end
 
 -- Water colors for different times of day
 local waterColors = {
-    dawn = {0.8, 0.6, 0.4},    -- Orange tint for sunrise (0:00)
+    dawn = {0.4, 0.3, 0.3},    -- Subtle orange-blue mix for sunrise (0:00)
     day = {0.04, 0.04, 0.2},   -- Bright blue (6:00)
-    dusk = {0.3, 0.3, 0.4},    -- Purple-blue for evening (11:00)
+    dusk = {0.3, 0.2, 0.3},    -- Purple-blue for evening (11:00)
     night = {0.02, 0.02, 0.1}  -- Dark blue for night (12:00)
 }
 
@@ -691,6 +695,10 @@ function game.update(dt)
         -- Check for collision with enemies
         local collided_enemy = spawnenemy.check_collision(player_ship.x, player_ship.y, player_ship.radius)
         if collided_enemy then
+            -- Clear any fishing text displays
+            catch_texts = {}
+            fishing_cooldown = 0
+            
             -- Start combat
             gameState.combat.is_active = true
             gameState.combat.zoom_progress = 0
@@ -823,18 +831,13 @@ function game.draw()
         local viewHeight = love.graphics.getHeight() / camera.scale
         local shoreExtension = 1000 -- How far the shore extends beyond the viewport
         
-        -- Draw shore (slightly darker than water)
-        local shoreColor = {
-            waterColor[1] * 0.6,
-            waterColor[2] * 0.6,
-            waterColor[3] * 0.6
-        }
-        love.graphics.setColor(shoreColor[1], shoreColor[2], shoreColor[3])
+        -- Draw sand-colored rectangle for shore area
+        love.graphics.setColor(0.87, 0.84, 0.69) -- Warm sand color
         love.graphics.rectangle("fill",
             camera.x - shoreExtension,  -- Left edge (extend past viewport)
-            0,  -- Top edge (at 0)
+            -1000,  -- Extend well above viewport
             viewWidth + shoreExtension * 2,  -- Width (extend both directions)
-            shore_division  -- Height (down to shore line)
+            shore_division + 1000  -- Height (include the extension)
         )
         
         -- Draw shore edge line
@@ -928,7 +931,7 @@ function game.draw()
                 if gameState.combat.defeat_flash.timer < gameState.combat.defeat_flash.text_display_time then
                     result_text = {
                         "Defeat!",
-                        string.format("Lost all %d crew members!", player_ship.men)
+                        string.format("Lost all %d crew member(s)!", player_ship.men)
                     }
                 end
             end
@@ -946,10 +949,32 @@ function game.draw()
                 local world_x = screen_center_x / camera.scale + camera.x
                 local world_y = screen_center_y / camera.scale + camera.y
                 
-                -- Calculate total height
-                local total_height = #result_text * font:getHeight()
+                -- Calculate dimensions for all lines
+                local max_width = 0
+                local total_height = 0
+                for _, line in ipairs(result_text) do
+                    local width = font:getWidth(line)
+                    max_width = math.max(max_width, width)
+                    total_height = (total_height + font:getHeight()) * 2
+                end
                 
-                -- Draw text centered vertically
+                -- Add padding for the background
+                local padding = 20 / scale  -- 20 pixels padding, adjusted for scale
+                
+                -- Draw semi-transparent black background
+                love.graphics.setColor(0, 0, 0, 0.7)  -- 70% opacity black
+                love.graphics.push()
+                love.graphics.scale(scale, scale)
+                love.graphics.rectangle("fill",
+                    (world_x - (max_width * scale / 2)) / scale - padding,
+                    (world_y - (total_height * scale / 2)) / scale - padding,
+                    max_width + padding * 2,
+                    total_height + padding * 2,
+                    10 / scale  -- Rounded corners, adjusted for scale
+                )
+                love.graphics.pop()
+                
+                -- Draw text
                 love.graphics.push()
                 love.graphics.scale(scale, scale)
                 
@@ -967,10 +992,12 @@ function game.draw()
                         love.graphics.scale(1.5, 1.5)  -- 50% bigger than the rest
                         x_pos = (world_x - (width * scale * 1.5 / 2)) / (scale * 1.5)
                         y_pos = (world_y - (total_height * scale / 2)) / (scale * 1.5)
+                        love.graphics.setColor(1, 1, 1, 1)
                         love.graphics.print(line, x_pos, y_pos)
                         love.graphics.pop()
                         y_pos = y_pos * 1.5 + font:getHeight() * 2  -- Add extra spacing after title
                     else
+                        love.graphics.setColor(1, 1, 1, 1)
                         love.graphics.print(line, x_pos, y_pos)
                         y_pos = y_pos + font:getHeight()
                     end

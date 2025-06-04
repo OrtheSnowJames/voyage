@@ -71,9 +71,9 @@ end
 
 -- Water colors for different times of day
 local waterColors = {
-    dawn = {0.8, 0.6, 0.4},    -- Orange tint for sunrise (0:00)
+    dawn = {0.4, 0.3, 0.3},    -- Subtle orange-blue mix for sunrise (0:00)
     day = {0.04, 0.04, 0.2},   -- Bright blue (6:00)
-    dusk = {0.3, 0.3, 0.4},    -- Purple-blue for evening (11:00)
+    dusk = {0.3, 0.2, 0.3},    -- Purple-blue for evening (11:00)
     night = {0.02, 0.02, 0.1}  -- Dark blue for night (12:00)
 }
 

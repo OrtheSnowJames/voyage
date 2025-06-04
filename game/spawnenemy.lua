@@ -2,7 +2,9 @@ local spawnenemy = {}
 
 -- configuration
 local ENEMY_SPAWN_INTERVAL = 10  -- seconds between enemy spawns
-local ENEMY_SPEED = 150  -- pixels per second
+local BASE_ENEMY_SPEED = 150  -- base speed in pixels per second
+local SPEED_INCREASE_PER_LEVEL = 30  -- speed increase per 1000 units of depth
+local MAX_SPEED_MULTIPLIER = 3  -- maximum speed multiplier (prevents excessive speeds)
 local ENEMY_SIZE = 20   -- size of enemy ships
 local SPAWN_MARGIN = 100  -- spawn enemies slightly outside view
 local SHORE_DIVISION = 60  -- match the shore_division from game.lua
@@ -42,6 +44,15 @@ local function is_near_shop(y)
     end
     
     return false
+end
+
+-- Add helper function to calculate enemy speed based on depth
+local function calculate_enemy_speed(y_position)
+    local depth_level = math.floor(math.abs(y_position) / 1000)
+    local speed_multiplier = 1 + (depth_level * SPEED_INCREASE_PER_LEVEL / BASE_ENEMY_SPEED)
+    -- Cap the multiplier to prevent excessive speeds
+    speed_multiplier = math.min(speed_multiplier, MAX_SPEED_MULTIPLIER)
+    return BASE_ENEMY_SPEED * speed_multiplier
 end
 
 function spawnenemy.update(dt, camera, player_x, player_y)
@@ -90,13 +101,17 @@ function spawnenemy.update(dt, camera, player_x, player_y)
             
             -- Only spawn if we found a valid position
             if spawn_y then
+                -- Calculate speed based on depth
+                local enemy_speed = calculate_enemy_speed(spawn_y)
+                
                 -- create new enemy
                 table.insert(enemies, {
                     x = spawn_x,
                     y = spawn_y,
                     direction = direction,
                     size = generate_enemy_size(player_y),
-                    radius = ENEMY_SIZE
+                    radius = ENEMY_SIZE,
+                    speed = enemy_speed  -- Store individual enemy speed
                 })
             end
         end
@@ -106,8 +121,8 @@ function spawnenemy.update(dt, camera, player_x, player_y)
     for i = #enemies, 1, -1 do
         local enemy = enemies[i]
         
-        -- move enemy
-        enemy.x = enemy.x + (ENEMY_SPEED * enemy.direction * dt)
+        -- move enemy using its individual speed
+        enemy.x = enemy.x + (enemy.speed * enemy.direction * dt)
         
         -- check if enemy is far off screen
         local far_margin = SPAWN_MARGIN * 2

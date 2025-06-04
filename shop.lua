@@ -78,6 +78,14 @@ local function get_rod_upgrade_cost(current_rod)
     return math.floor(25 * (1.5 ^ (current_level - 1)))
 end
 
+-- Calculate cost for speed upgrade
+local function get_speed_upgrade_cost(current_speed)
+    -- Start with base speed of 200, each upgrade adds 20
+    local upgrade_level = math.floor((current_speed - 200) / 20) + 1
+    -- Start exponential immediately with base cost of 25
+    return math.floor(25 * (1.5 ^ (upgrade_level - 1)))
+end
+
 function shop.get_coins()
     return coins
 end
@@ -271,9 +279,20 @@ function shop.update(game_state, player_ship, shopkeeper)
     end
     suit.Label("Owned: " .. #port_a_shops, {align = "center"}, suit.layout:row(section_width, 30))
     
-    -- Empty slot (bottom right) - reserved for future content
+    -- Speed upgrade section (bottom right)
     suit.layout:reset(grid_start_x + (section_width + padding) * 2, row2_y)
-    suit.Label("Coming Soon!", {align = "center"}, suit.layout:row(section_width, 30))
+    suit.Label("Ship Speed", {align = "center"}, suit.layout:row(section_width, 30))
+    local speed_cost = get_speed_upgrade_cost(player_ship.max_speed)
+    if coins >= speed_cost then
+        if suit.Button("Upgrade Speed (" .. speed_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
+            coins = coins - speed_cost
+            player_ship.max_speed = player_ship.max_speed + 20
+            print("Upgraded speed to: " .. player_ship.max_speed)
+        end
+    else
+        suit.Label("Need " .. speed_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
+    end
+    suit.Label("Current: " .. player_ship.max_speed .. " speed", {align = "center"}, suit.layout:row(section_width, 30))
 end
 
 -- Draw the physical shops in the game world
