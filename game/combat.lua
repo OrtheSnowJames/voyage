@@ -103,39 +103,34 @@ function combat.combat(crew_size, enemy_size, sword_level, top_sword_level)
     end
     print("Best Roll: " .. best_roll)
     
-    -- calculate final casualties
-    local total_casualties = math.floor(enemy_size * best_roll * enemy_ratio)
-    print("Total Casualties (before minimum): " .. total_casualties)
+    -- Calculate fainted using equation: (their_men - 1) * random(0.7 to 1.0)
+    local base_fainted = enemy_size - 1
+    local random_multiplier = 0.7 + (math.random() * 0.3)  -- 0.7 to 1.0
+    local fainted = math.floor(base_fainted * random_multiplier)
     
-    -- Ensure there are always some consequences to combat
-    -- At least 10% of enemy size will be casualties+fainted, minimum 1
-    local minimum_consequences = math.max(1, math.floor(enemy_size * 0.1))
-    total_casualties = math.max(minimum_consequences, total_casualties)
+    -- Better swords reduce fainted count slightly
+    local sword_reduction = math.floor(sword_effectiveness * 2)  -- up to 2 reduction with best sword
+    fainted = math.max(0, fainted - sword_reduction)
     
-    -- ensure we don't lose more than we have
-    total_casualties = math.min(total_casualties, crew_size - 1)  -- always keep at least 1 crew
-    print("Total Casualties (after min/cap): " .. total_casualties)
-    
-    -- calculate how many are just fainted vs actual casualties
-    -- Increase base faint ratio to make swords more effective at preventing deaths
-    local base_faint_ratio = 0.6  -- 60% base chance to faint instead of die
-    local faint_ratio = base_faint_ratio + (sword_effectiveness * 0.4)  -- up to 100% with best sword
-    local fainted = math.floor(total_casualties * faint_ratio)
-    local actual_casualties = total_casualties - fainted
-    
-    -- Ensure at least one consequence if we had any total casualties
-    if total_casualties > 0 and fainted == 0 and actual_casualties == 0 then
-        fainted = 1
+    -- Calculate actual casualties - much lower chance with better crew advantage
+    local actual_casualties = 0
+    if crew_size < enemy_size * 1.5 then  -- only if crew advantage is small
+        local casualty_chance = math.random(1, 10)
+        if casualty_chance <= 2 then  -- 20% chance
+            actual_casualties = 1
+        end
     end
     
-    -- Ensure at least one fainted with any sword
-    if total_casualties > 0 and sword_level > 0 and fainted == 0 then
-        fainted = 1
-        actual_casualties = math.max(0, total_casualties - 1)
+    -- Better swords can prevent casualties entirely
+    if actual_casualties > 0 and sword_level >= 3 then  -- Great Sword or better
+        if math.random(1, 10) <= sword_level then  -- higher level = better chance to prevent death
+            actual_casualties = 0
+            fainted = fainted + 1  -- convert death to fainted
+        end
     end
     
-    print("Faint Ratio: " .. faint_ratio)
     print("Fainted: " .. fainted)
+    print("Sword Reduction: " .. sword_reduction)
     print("Actual Casualties: " .. actual_casualties)
     
     return {

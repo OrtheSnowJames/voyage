@@ -293,6 +293,29 @@ function shop.update(game_state, player_ship, shopkeeper)
         suit.Label("Need " .. speed_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
     end
     suit.Label("Current: " .. player_ship.max_speed .. " speed", {align = "center"}, suit.layout:row(section_width, 30))
+    
+    -- Third Row
+    local row3_y = row2_y + section_height + padding
+    
+    -- Healing Section (third row left)
+    suit.layout:reset(grid_start_x, row3_y)
+    suit.Label("Pharmacy", {align = "center"}, suit.layout:row(section_width, 30))
+    local healing_cost = player_ship.fainted_men * 10
+    if player_ship.fainted_men > 0 then
+        if coins >= healing_cost then
+            if suit.Button("Heal Fainted Crew (" .. healing_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
+                coins = coins - healing_cost
+                player_ship.men = player_ship.men + player_ship.fainted_men
+                print("Healed " .. player_ship.fainted_men .. " crew members!")
+                player_ship.fainted_men = 0
+            end
+        else
+            suit.Label("Need " .. healing_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
+        end
+    else
+        suit.Label("No fainted crew", {align = "center"}, suit.layout:row(section_width, 30))
+    end
+    suit.Label("Fainted: " .. player_ship.fainted_men, {align = "center"}, suit.layout:row(section_width, 30))
 end
 
 -- Draw the physical shops in the game world

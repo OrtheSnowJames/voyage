@@ -830,7 +830,7 @@ function game.update(dt)
 end
 
 function game.draw()
-    -- Get current water color based on time of day
+    -- Get current water color based off the time of day
     local waterColor = getCurrentWaterColor()
     love.graphics.clear(waterColor[1], waterColor[2], waterColor[3])
 
