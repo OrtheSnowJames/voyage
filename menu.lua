@@ -1,73 +1,14 @@
 local menu = {}
 local suit = require "SUIT"
-local game = require("game")  -- Import game module to access time system and ripples
+local serialize = require("game.serialize")
 
--- Create menu-specific ripple system
-local ripples = {
-    particles = {},
-    maxParticles = 50,
-    spawnTimer = 0,
-    spawnRate = 0.5, -- seconds between spawns
-    spawnMargin = 100 -- spawn ripples slightly outside view
+local state = {
+    ship_name = {text = ""},  -- Initialize with text property for SUIT input
+    name_submitted = false,  -- Track if name has been submitted
+    show_error = false,  -- Show error if name is empty
+    time = 0,  -- Track time for water colors
+    DAY_LENGTH = 12 * 60  -- 12 minutes in seconds
 }
-
--- Copy ripple functions from game
-function ripples:spawn(x, y)
-    if #self.particles >= self.maxParticles then return end
-    
-    -- Get viewport boundaries (in world coordinates)
-    local viewWidth = love.graphics.getWidth()
-    local viewHeight = love.graphics.getHeight()
-    
-    -- Generate position within and slightly outside viewport if not specified
-    local ripple_x = x or (-self.spawnMargin + math.random() * (viewWidth + 2 * self.spawnMargin))
-    local ripple_y = y or (-self.spawnMargin + math.random() * (viewHeight + 2 * self.spawnMargin))
-    
-    table.insert(self.particles, {
-        x = ripple_x,
-        y = ripple_y,
-        radius = love.math.random(5, 15),
-        maxRadius = love.math.random(30, 60),
-        speed = love.math.random(20, 40),
-        alpha = 1
-    })
-end
-
-function ripples:update(dt)
-    self.spawnTimer = self.spawnTimer + dt
-    if self.spawnTimer >= self.spawnRate then
-        self:spawn()
-        self.spawnTimer = 0
-    end
-
-    -- Get viewport boundaries
-    local viewWidth = love.graphics.getWidth()
-    local viewHeight = love.graphics.getHeight()
-    
-    for i = #self.particles, 1, -1 do
-        local p = self.particles[i]
-        p.radius = p.radius + p.speed * dt
-        p.alpha = 1 - (p.radius / p.maxRadius)
-        
-        -- Remove particles that are either too big or outside viewport with margin
-        if p.radius >= p.maxRadius or
-           p.x < -self.spawnMargin or
-           p.x > viewWidth + self.spawnMargin or
-           p.y < -self.spawnMargin or
-           p.y > viewHeight + self.spawnMargin then
-            table.remove(self.particles, i)
-        end
-    end
-end
-
-function ripples:draw()
-    love.graphics.setLineWidth(2)
-    for _, p in ipairs(self.particles) do
-        love.graphics.setColor(1, 1, 1, p.alpha * 0.3)
-        love.graphics.circle("line", p.x, p.y, p.radius)
-    end
-    love.graphics.setColor(1, 1, 1, 1)
-end
 
 -- Water colors for different times of day
 local waterColors = {
@@ -83,8 +24,8 @@ local function lerp(a, b, t)
 end
 
 -- Function to get current water color based on time
-local function getCurrentWaterColor(time_system)
-    local timeOfDay = (time_system.time / time_system.DAY_LENGTH) * 12 -- Convert to 12-hour format
+local function getCurrentWaterColor()
+    local timeOfDay = (state.time / state.DAY_LENGTH) * 12 -- Convert to 12-hour format
     
     if timeOfDay >= 0 and timeOfDay < 1 then  -- Dawn (0-1)
         local t = timeOfDay -- 0 to 1
@@ -114,73 +55,161 @@ local function getCurrentWaterColor(time_system)
     end
 end
 
-function menu.update(dt)
-    -- Update time system
-    if not game.player_ship.time_system.is_sleeping then
-        game.player_ship.time_system.time = game.player_ship.time_system.time + dt
-        
-        -- Check if we've reached the end of the day (12 minutes)
-        if game.player_ship.time_system.time >= game.player_ship.time_system.DAY_LENGTH then
-            game.player_ship.time_system.time = 0
+-- Check if save file exists at startup
+local function check_save_file()
+    if love.filesystem.getInfo("save.lua") then
+        print("there")
+        local save_data = serialize.load_data()
+        if save_data and save_data.name and save_data.name ~= "" then
+            state.ship_name.text = save_data.name
+            state.name_submitted = true
+            print("Loaded ship name: " .. save_data.name)  -- Add debug print
+            return true
+        else
+            print("No name in save data")  -- Add debug print
         end
+    else
+        print("not there apparently")
+    end
+    return false
+end
+
+-- Create menu-specific ripple system
+local ripples = {
+    particles = {},
+    maxParticles = 50,
+    spawnTimer = 0,
+    spawnRate = 0.5,
+    spawnMargin = 100
+}
+
+function menu.get_name()
+    return state.ship_name.text
+end
+
+function ripples:spawn()
+    if #self.particles >= self.maxParticles then return end
+    
+    table.insert(self.particles, {
+        x = math.random() * love.graphics.getWidth(),
+        y = math.random() * love.graphics.getHeight(),
+        radius = love.math.random(5, 15),
+        maxRadius = love.math.random(30, 60),
+        speed = love.math.random(20, 40),
+        alpha = 1
+    })
+end
+
+function ripples:update(dt)
+    self.spawnTimer = self.spawnTimer + dt
+    if self.spawnTimer >= self.spawnRate then
+        self:spawn()
+        self.spawnTimer = 0
+    end
+    
+    for i = #self.particles, 1, -1 do
+        local p = self.particles[i]
+        p.radius = p.radius + p.speed * dt
+        p.alpha = 1 - (p.radius / p.maxRadius)
+        
+        if p.radius >= p.maxRadius then
+            table.remove(self.particles, i)
+        end
+    end
+end
+
+function ripples:draw()
+    love.graphics.setLineWidth(2)
+    for _, p in ipairs(self.particles) do
+        love.graphics.setColor(1, 1, 1, p.alpha * 0.3)
+        love.graphics.circle("line", p.x, p.y, p.radius)
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function menu.load()
+    -- Check save file on enter
+    check_save_file()
+end
+
+function menu.update(dt)
+    -- Update time
+    state.time = state.time + dt
+    if state.time >= state.DAY_LENGTH then
+        state.time = 0
     end
 
     -- Update ripples
     ripples:update(dt)
 
-    -- Center the buttons on screen
-    local window_width = love.graphics.getWidth()
-    local window_height = love.graphics.getHeight()
-    local button_width = 200
-    local button_height = 50
-    local padding = 20
+    -- Reset layout
+    suit.layout:reset(love.graphics.getWidth()/2 - 100, love.graphics.getHeight()/2 - 50)
     
-    -- Calculate center position
-    local start_x = (window_width - button_width) / 2
-    local start_y = (window_height - (button_height * 2 + padding)) / 2
-    
-    -- Reset layout for menu buttons
-    suit.layout:reset(start_x, start_y)
-    suit.layout:padding(padding)
-    
-    -- Play Game button
-    if suit.Button("Play Game", {id = "play"}, suit.layout:row(button_width, button_height)).hit then
-        -- Switch to game state
-        return "game"
+    if not state.name_submitted then
+        -- Ship name input
+        suit.Label("Enter your ship's name:", {align = "left"}, suit.layout:row(200, 30))
+        
+        -- Text input for ship name
+        if suit.Input(state.ship_name, suit.layout:row(200, 30)).submitted and #state.ship_name.text > 0 then
+            state.name_submitted = true
+            state.show_error = false
+        end
+        
+        -- Start button
+        if suit.Button("Startup", suit.layout:row(200, 30)).hit then
+            if #state.ship_name.text > 0 then
+                state.name_submitted = true
+                state.show_error = false
+            else
+                state.show_error = true
+            end
+        end
+        
+        -- Show error if name is empty
+        if state.show_error then
+            suit.Label("Please enter a name!", {align = "left", color = {normal = {fg = {1,0,0}}}}, suit.layout:row(200, 30))
+        end
+    else
+        -- Regular menu buttons after name is set
+        if suit.Button("Play", suit.layout:row(200, 30)).hit then
+            return "game"
+        end
+        
+        if suit.Button("Reset Save", suit.layout:row(200, 30)).hit then
+            love.filesystem.remove("save.lua")
+            state.name_submitted = false
+            state.ship_name.text = ""
+            state.show_error = false
+        end
     end
     
-    -- Quit button
-    if suit.Button("Quit", {id = "quit"}, suit.layout:row(button_width, button_height)).hit then
-        love.event.quit()
-    end
-
-    if suit.Button("Eject Save", {id = "delete"}, suit.layout:row(button_width, button_height)).hit then
-        love.filesystem.remove("save.lua")
-    end
-
     return nil
 end
 
 function menu.draw()
     -- Get current water color based on time of day
-    local waterColor = getCurrentWaterColor(game.player_ship.time_system)
-    love.graphics.clear(waterColor[1], waterColor[2], waterColor[3])
+    local waterColor = getCurrentWaterColor()
+    love.graphics.setColor(waterColor[1], waterColor[2], waterColor[3])
+    love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
     
-    -- Draw ripples
+    -- Draw ripples first as background effect
     ripples:draw()
     
     -- Draw title
     love.graphics.setColor(1, 1, 1, 1)
-    local title = "Fishing Voyage"
+    local title = "Voyage"
     local font = love.graphics.getFont()
     local title_width = font:getWidth(title)
-    local title_height = font:getHeight()
     love.graphics.print(title, 
-        (love.graphics.getWidth() - title_width) / 2,
+        love.graphics.getWidth()/2 - title_width/2, 
         50)  -- Fixed distance from top
     
-    -- Draw menu UI
+    -- Draw UI
     suit.draw()
+end
+
+function menu.get_ship_name()
+    return state.ship_name.text
 end
 
 return menu

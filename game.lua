@@ -7,6 +7,7 @@ local serialize = require("game.serialize")
 local combat = require("game.combat")
 local shop = require("shop")
 local spawnenemy = require("game.spawnenemy")
+local menu = require("menu")  -- Add menu requirement to get ship name
 
 -- game configuration (modifiable during runtime)
 local game_config = {
@@ -58,6 +59,7 @@ local camera = {
 local player_ship = {
     x = 100,  -- starting x position
     y = 100,  -- starting y position
+    name = "",  -- ship name
     men = 1,
     fainted_men = 0,
     velocity_x = 0,
@@ -75,21 +77,21 @@ local player_ship = {
     
     radius = 20,
     color = {1, 1, 1, 1},
-    rod = "Basic Rod",  -- moved from player
+    rod = "Basic Rod",
     sword = "Basic Sword",
-    direction = 0,      -- moved from player
-    caught_fish = {},   -- list of caught fish
+    direction = 0,
+    caught_fish = {},
     time_system = {
-        time = 0,  -- current time in seconds
-        DAY_LENGTH = 12 * 60,  -- 12 minutes in seconds
-        SLEEP_DURATION = 10,  -- 10 seconds of sleep
+        time = 0,
+        DAY_LENGTH = 12 * 60,
+        SLEEP_DURATION = 10,
         sleep_timer = 0,
         fade_alpha = 0,
         is_sleeping = false,
         is_fading = false,
-        FADE_DURATION = 2,  -- 2 seconds to fade in/out
+        FADE_DURATION = 2,
         fade_timer = 0,
-        fade_direction = "in"  -- "in" or "out"
+        fade_direction = "in"
     }
 }
 
@@ -402,6 +404,17 @@ function camera:zoom(factor, target_x, target_y)
     end
 end
 
+-- Get saveable data (excluding functions)
+function game.get_saveable_data()
+    local data = {}
+    for k, v in pairs(player_ship) do
+        if type(v) ~= "function" then
+            data[k] = v
+        end
+    end
+    return data
+end
+
 function game.load()
     local saved_data = serialize.load_data()
     if saved_data then
@@ -409,8 +422,16 @@ function game.load()
         for k, v in pairs(saved_data) do
             if type(player_ship[k]) ~= "function" then  -- Don't overwrite functions
                 player_ship[k] = v
+                if k == "name" then
+                    print("Loaded ship name in game: " .. v)  -- Add debug print
+                end
             end
         end
+    else
+        -- If no save data, get name from menu
+        player_ship.name = menu.get_name()
+        print("Setting initial ship name: " .. player_ship.name)  -- Add debug print
+        serialize.save_data(game.get_saveable_data())
     end
 end
 
@@ -559,17 +580,6 @@ local function getCurrentWaterColor()
     end
 end
 
--- Get saveable data (excluding functions)
-local function get_saveable_data()
-    local data = {}
-    for k, v in pairs(player_ship) do
-        if type(v) ~= "function" then
-            data[k] = v
-        end
-    end
-    return data
-end
-
 -- Function to handle sleep state
 local function during_sleep()
     -- Check if near any shop (port-a-shop or shopkeeper)
@@ -600,7 +610,8 @@ local function during_sleep()
     end
 
     -- Save data
-    serialize.save_data(get_saveable_data())
+    player_ship.name = menu.get_name()
+    serialize.save_data(game.get_saveable_data())
 end
 
 function game.toggleDebug()
@@ -665,7 +676,11 @@ function game.update(dt)
     end
 
     if suit.Button("Back to Menu", {id = "menu"}, suit.layout:row(120, 30)).hit then
-        serialize.save_data(player_ship)
+        player_ship.name = menu.get_name()
+        print("Saving ship name on menu return: " .. player_ship.name)  -- Add debug print
+        local data = game.get_saveable_data()
+        print("Save data contains name: " .. (data.name or "NO NAME"))  -- Add debug print
+        serialize.save_data(data)
         return "menu"
     end
 
@@ -815,13 +830,16 @@ function game.update(dt)
 end
 
 function game.draw()
+    -- Get current water color based on time of day
+    local waterColor = getCurrentWaterColor()
+    love.graphics.clear(waterColor[1], waterColor[2], waterColor[3])
+
     love.graphics.push()
     love.graphics.translate(-camera.x * camera.scale, -camera.y * camera.scale)
     love.graphics.scale(camera.scale)
 
-    -- Get current water color based on time of day
-    local waterColor = getCurrentWaterColor()
-    love.graphics.clear(waterColor[1], waterColor[2], waterColor[3])
+    -- Draw ripples first as background effect
+    ripples:draw()
     
     -- Only draw game world if not sleeping
     if not player_ship.time_system.is_sleeping then
@@ -847,9 +865,6 @@ function game.draw()
             camera.x - shoreExtension, shore_division,
             camera.x + viewWidth + shoreExtension, shore_division
         )
-        
-        -- Draw water ripples
-        ripples:draw()
         
         -- Draw the shopkeeper
         shopkeeper:draw()
@@ -904,6 +919,18 @@ function game.draw()
             -player_ship.radius, -player_ship.radius/2,
             -player_ship.radius, player_ship.radius/2
         )
+        
+        -- Draw ship name below the ship
+        love.graphics.push()
+        love.graphics.scale(1/ship_animation.scale, 1/ship_animation.scale)  -- Counter the ship animation scale
+        love.graphics.rotate(-player_ship.rotation)  -- Counter the ship rotation
+        love.graphics.setColor(1, 1, 1, 1)
+        local font = love.graphics.getFont()
+        local text_width = font:getWidth(player_ship.name)
+        love.graphics.print(player_ship.name, 
+            -text_width/2,  -- Center horizontally
+            player_ship.radius * 1.5 * ship_animation.scale)  -- Position below ship
+        love.graphics.pop()
         
         love.graphics.pop()
 
