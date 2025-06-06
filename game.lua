@@ -437,6 +437,8 @@ function game.get_saveable_data()
             data[k] = v
         end
     end
+    -- Add shop data
+    data.shop_data = shop.get_port_a_shops_data()
     return data
 end
 
@@ -445,7 +447,10 @@ function game.load()
     if saved_data then
         -- Only copy saved data properties, preserving methods
         for k, v in pairs(saved_data) do
-            if type(player_ship[k]) ~= "function" then  -- Don't overwrite functions
+            if k == "shop_data" then
+                -- Load shop data separately
+                shop.set_port_a_shops_data(v)
+            elseif type(player_ship[k]) ~= "function" then  -- Don't overwrite functions
                 player_ship[k] = v
             end
         end

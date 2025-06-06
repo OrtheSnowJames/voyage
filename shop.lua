@@ -622,4 +622,23 @@ function shop.reset()
     inventory_state.selected_fish = nil
     inventory_state.filtered_fish = {}
 end
+
+-- Get port-a-shops data for saving
+function shop.get_port_a_shops_data()
+    return {
+        port_a_shops = port_a_shops,
+        coins = coins
+    }
+end
+
+-- Set port-a-shops data from save
+function shop.set_port_a_shops_data(data)
+    if data.port_a_shops then
+        port_a_shops = data.port_a_shops
+    end
+    if data.coins then
+        coins = data.coins
+    end
+end
+
 return shop
