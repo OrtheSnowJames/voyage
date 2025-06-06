@@ -88,6 +88,10 @@ function fishing.get_rod_top_rarity()
     return #rods
 end
 
+function fishing.get_all_fish()
+    return fish
+end
+
 -- get available fish based on Y position
 -- each 1000 units deeper unlocks better fish with a sliding window
 function fishing.get_fish_avalible(x, y)

@@ -108,7 +108,6 @@ end
 
 function serialize.save_data(data)
     local serialized = do_serialize(data)
-    print("Saving data: " .. serialized)  -- Add debug print
     love.filesystem.write("save.lua", serialized)
     print("saved")
 end
@@ -116,8 +115,6 @@ end
 function serialize.load_data()
     local content = love.filesystem.read("save.lua")
     if content then
-        print("Loading data: " .. content)  -- Add debug print
-        print("hsdas")
         return do_deserialize(content)
     end
     return nil

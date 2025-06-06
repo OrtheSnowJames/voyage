@@ -58,18 +58,12 @@ end
 -- Check if save file exists at startup
 local function check_save_file()
     if love.filesystem.getInfo("save.lua") then
-        print("there")
         local save_data = serialize.load_data()
         if save_data and save_data.name and save_data.name ~= "" then
             state.ship_name.text = save_data.name
             state.name_submitted = true
-            print("Loaded ship name: " .. save_data.name)  -- Add debug print
             return true
-        else
-            print("No name in save data")  -- Add debug print
         end
-    else
-        print("not there apparently")
     end
     return false
 end
@@ -142,21 +136,26 @@ function menu.update(dt)
     -- Update ripples
     ripples:update(dt)
 
-    -- Reset layout
-    suit.layout:reset(love.graphics.getWidth()/2 - 100, love.graphics.getHeight()/2 - 50)
+    -- Reset layout with bigger buttons and more spacing
+    local button_width = 300
+    local button_height = 50
+    local button_spacing = 20
+    suit.layout:reset(love.graphics.getWidth()/2 - button_width/2, love.graphics.getHeight()/2 - 100)
     
     if not state.name_submitted then
         -- Ship name input
-        suit.Label("Enter your ship's name:", {align = "left"}, suit.layout:row(200, 30))
+        suit.Label("Enter your ship's name:", {align = "left"}, suit.layout:row(button_width, 40))
+        suit.layout:row(button_width, button_spacing) -- spacing
         
         -- Text input for ship name
-        if suit.Input(state.ship_name, suit.layout:row(200, 30)).submitted and #state.ship_name.text > 0 then
+        if suit.Input(state.ship_name, suit.layout:row(button_width, button_height)).submitted and #state.ship_name.text > 0 then
             state.name_submitted = true
             state.show_error = false
         end
+        suit.layout:row(button_width, button_spacing) -- spacing
         
         -- Start button
-        if suit.Button("Startup", suit.layout:row(200, 30)).hit then
+        if suit.Button("Startup", suit.layout:row(button_width, button_height)).hit then
             if #state.ship_name.text > 0 then
                 state.name_submitted = true
                 state.show_error = false
@@ -167,19 +166,26 @@ function menu.update(dt)
         
         -- Show error if name is empty
         if state.show_error then
-            suit.Label("Please enter a name!", {align = "left", color = {normal = {fg = {1,0,0}}}}, suit.layout:row(200, 30))
+            suit.layout:row(button_width, button_spacing) -- spacing
+            suit.Label("Please enter a name!", {align = "left", color = {normal = {fg = {1,0,0}}}}, suit.layout:row(button_width, 40))
         end
     else
         -- Regular menu buttons after name is set
-        if suit.Button("Play", suit.layout:row(200, 30)).hit then
+        if suit.Button("Play", suit.layout:row(button_width, button_height)).hit then
             return "game"
         end
+        suit.layout:row(button_width, button_spacing) -- spacing
         
-        if suit.Button("Reset Save", suit.layout:row(200, 30)).hit then
+        if suit.Button("Reset Save", suit.layout:row(button_width, button_height)).hit then
             love.filesystem.remove("save.lua")
             state.name_submitted = false
             state.ship_name.text = ""
             state.show_error = false
+        end
+        suit.layout:row(button_width, button_spacing) -- spacing
+        
+        if suit.Button("Quit", suit.layout:row(button_width, button_height)).hit then
+            love.event.quit()
         end
     end
     

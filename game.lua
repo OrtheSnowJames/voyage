@@ -81,6 +81,7 @@ local player_ship = {
     sword = "Basic Sword",
     direction = 0,
     caught_fish = {},
+    inventory = {},
     time_system = {
         time = 0,
         DAY_LENGTH = 12 * 60,
@@ -197,6 +198,7 @@ local function reset_game()
     player_ship.rod = "Basic Rod"
     player_ship.sword = "Basic Sword"
     player_ship.caught_fish = {}
+    player_ship.inventory = {}
     player_ship.time_system.time = 0
 
     -- reset combat and defeat flash state
@@ -422,15 +424,11 @@ function game.load()
         for k, v in pairs(saved_data) do
             if type(player_ship[k]) ~= "function" then  -- Don't overwrite functions
                 player_ship[k] = v
-                if k == "name" then
-                    print("Loaded ship name in game: " .. v)  -- Add debug print
-                end
             end
         end
     else
         -- If no save data, get name from menu
         player_ship.name = menu.get_name()
-        print("Setting initial ship name: " .. player_ship.name)  -- Add debug print
         serialize.save_data(game.get_saveable_data())
     end
 end
@@ -609,9 +607,7 @@ local function during_sleep()
         print("All crew members healed!")
     end
 
-    -- Save data
-    player_ship.name = menu.get_name()
-    serialize.save_data(game.get_saveable_data())
+    -- Note: Game will be saved after waking up, not during sleep
 end
 
 function game.toggleDebug()
@@ -670,6 +666,10 @@ function game.update(dt)
                     player_ship.time_system.is_fading = false
                     player_ship.time_system.is_sleeping = false
                     player_ship.time_system.fade_alpha = 0
+                    
+                    -- Save game after fully waking up
+                    player_ship.name = menu.get_name()
+                    serialize.save_data(game.get_saveable_data())
                 end
             end
         end
@@ -677,9 +677,7 @@ function game.update(dt)
 
     if suit.Button("Back to Menu", {id = "menu"}, suit.layout:row(120, 30)).hit then
         player_ship.name = menu.get_name()
-        print("Saving ship name on menu return: " .. player_ship.name)  -- Add debug print
         local data = game.get_saveable_data()
-        print("Save data contains name: " .. (data.name or "NO NAME"))  -- Add debug print
         serialize.save_data(data)
         return "menu"
     end
@@ -1115,6 +1113,15 @@ function game.draw()
                 table.insert(player_ship.caught_fish, fish_caught)
             end
             print("Added 100 fish!")
+        end
+
+        -- Add one of every fish button
+        if suit.Button("Add Every Fish", suit.layout:row(100, 30)).hit then
+            local all_fish = fishing.get_all_fish()
+            for _, fish_name in ipairs(all_fish) do
+                table.insert(player_ship.caught_fish, fish_name)
+            end
+            print("Added one of every fish type (" .. #all_fish .. " fish)!")
         end
 
         -- Skip 1 minute button

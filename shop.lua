@@ -10,6 +10,15 @@ local show_no_fish_message = false
 local message_timer = 0
 local MESSAGE_DURATION = 2  -- How long to show the message
 
+-- Inventory UI state
+local inventory_state = {
+    mode = "",  -- "", "transfer", "view"
+    search_text = {text = ""},
+    selected_fish = nil,
+    filtered_fish = {},
+    scroll_offset = 0
+}
+
 -- Port-a-shop configuration
 local SHOP_SPACING = 1000  -- Distance between shops (changed from 40)
 local SHOP_SIZE = { width = 60, height = 40 }  -- Size of the shop platform
@@ -84,6 +93,33 @@ local function get_speed_upgrade_cost(current_speed)
     local upgrade_level = math.floor((current_speed - 200) / 20) + 1
     -- Start exponential immediately with base cost of 25
     return math.floor(25 * (1.5 ^ (upgrade_level - 1)))
+end
+
+-- Filter fish based on search text
+local function filter_fish(fish_list, search_text)
+    if search_text == "" then
+        return fish_list
+    end
+    
+    local filtered = {}
+    local search_lower = string.lower(search_text)
+    for _, fish in ipairs(fish_list) do
+        if string.find(string.lower(fish), search_lower) then
+            table.insert(filtered, fish)
+        end
+    end
+    return filtered
+end
+
+-- Count fish in inventory
+local function count_fish_in_inventory(fish_name, inventory)
+    local count = 0
+    for _, fish in ipairs(inventory) do
+        if fish == fish_name then
+            count = count + 1
+        end
+    end
+    return count
 end
 
 function shop.get_coins()
@@ -171,6 +207,180 @@ function shop.update(game_state, player_ship, shopkeeper)
     -- Get window dimensions
     local window_width = love.graphics.getWidth()
     local window_height = love.graphics.getHeight()
+    
+    if inventory_state.mode == "transfer" then
+        -- Transfer interface
+        suit.layout:reset(window_width/2 - 300, 50)
+        suit.Label("Transfer Fish to Inventory (5 coins each)", {align = "center"}, suit.layout:row(600, 30))
+        suit.Label("Current Coins: " .. string.format("%.1f", coins), {align = "center"}, suit.layout:row(600, 30))
+        
+        -- Search box
+        suit.layout:reset(window_width/2 - 200, 120)
+        suit.Label("Search fish:", {align = "left"}, suit.layout:row(400, 30))
+        local input_result = suit.Input(inventory_state.search_text, suit.layout:row(400, 30))
+        if input_result.submitted or input_result.changed then
+            -- Update filtered list when search changes
+            local all_fish = {}
+            for _, fish in ipairs(player_ship.caught_fish) do
+                table.insert(all_fish, fish)
+            end
+            inventory_state.filtered_fish = filter_fish(all_fish, inventory_state.search_text.text)
+        end
+        
+        -- Fish list
+        suit.layout:reset(window_width/2 - 200, 200)
+        suit.Label("Select fish to transfer:", {align = "left"}, suit.layout:row(400, 30))
+        
+        local unique_fish = {}
+        local fish_counts = {}
+        for _, fish in ipairs(inventory_state.filtered_fish) do
+            if not fish_counts[fish] then
+                fish_counts[fish] = 0
+                table.insert(unique_fish, fish)
+            end
+            fish_counts[fish] = fish_counts[fish] + 1
+        end
+        
+        for i, fish in ipairs(unique_fish) do
+            local button_text = fish .. " (" .. fish_counts[fish] .. ")"
+            if coins >= 5 then
+                if suit.Button(button_text, suit.layout:row(400, 30)).hit then
+                    -- Transfer one fish
+                    coins = coins - 5
+                    table.insert(player_ship.inventory, fish)
+                    -- Remove one instance from caught_fish
+                    for j, caught_fish in ipairs(player_ship.caught_fish) do
+                        if caught_fish == fish then
+                            table.remove(player_ship.caught_fish, j)
+                            break
+                        end
+                    end
+                    -- Update filtered list
+                    local all_fish = {}
+                    for _, f in ipairs(player_ship.caught_fish) do
+                        table.insert(all_fish, f)
+                    end
+                    inventory_state.filtered_fish = filter_fish(all_fish, inventory_state.search_text.text)
+                    print("Transferred " .. fish .. " to inventory!")
+                end
+            else
+                suit.Label(button_text .. " - Need 5 coins", {align = "left"}, suit.layout:row(400, 30))
+            end
+        end
+        
+        -- Back button
+        suit.layout:reset(window_width/2 - 100, window_height - 100)
+        if suit.Button("Back", suit.layout:row(200, 30)).hit then
+            inventory_state.mode = ""
+        end
+        
+    elseif inventory_state.mode == "view" then
+        -- View inventory interface
+        suit.layout:reset(window_width/2 - 300, 50)
+        suit.Label("Fish Inventory", {align = "center"}, suit.layout:row(600, 40))
+        
+        -- Count unique fish in inventory
+        local inventory_counts = {}
+        local unique_inventory = {}
+        for _, fish in ipairs(player_ship.inventory) do
+            if not inventory_counts[fish] then
+                inventory_counts[fish] = 0
+                table.insert(unique_inventory, fish)
+            end
+            inventory_counts[fish] = inventory_counts[fish] + 1
+        end
+        
+        -- Scroll controls
+        local items_per_page = 12  -- How many fish to show at once
+        local max_scroll = math.max(0, #unique_inventory - items_per_page)
+        
+        suit.layout:reset(window_width/2 - 200, 120)
+        if #unique_inventory == 0 then
+            suit.Label("Inventory is empty", {align = "center"}, suit.layout:row(400, 30))
+        else
+            -- Scroll up button
+            if inventory_state.scroll_offset > 0 then
+                if suit.Button("▲ Scroll Up", suit.layout:row(400, 30)).hit then
+                    inventory_state.scroll_offset = math.max(0, inventory_state.scroll_offset - 3)
+                end
+            else
+                suit.Label("", {align = "center"}, suit.layout:row(400, 30)) -- Spacer
+            end
+            
+            -- Display fish list with scrolling
+            local start_index = inventory_state.scroll_offset + 1
+            local end_index = math.min(start_index + items_per_page - 1, #unique_inventory)
+             
+            local current_y = 180  -- Start Y position after scroll up button
+            for i = start_index, end_index do
+                local fish = unique_inventory[i]
+                local fish_value = fishing.get_fish_value(fish)
+                
+                -- Fish info on left side
+                suit.layout:reset(window_width/2 - 200, current_y)
+                suit.Label(fish .. " x" .. inventory_counts[fish] .. " (Value: " .. fish_value .. " each)", 
+                          {align = "left"}, suit.layout:row(280, 30))
+                
+                -- Deposit button on right side
+                suit.layout:reset(window_width/2 + 90, current_y)
+                if suit.Button("Deposit", suit.layout:row(80, 30)).hit then
+                    -- Remove one fish from inventory
+                    for j, inv_fish in ipairs(player_ship.inventory) do
+                        if inv_fish == fish then
+                            table.remove(player_ship.inventory, j)
+                            break
+                        end
+                    end
+                    -- Add to caught_fish
+                    table.insert(player_ship.caught_fish, fish)
+                    
+                    -- Update counts for display
+                    inventory_counts[fish] = inventory_counts[fish] - 1
+                    if inventory_counts[fish] <= 0 then
+                        -- Remove from unique_inventory if count reaches 0
+                        for k, unique_fish in ipairs(unique_inventory) do
+                            if unique_fish == fish then
+                                table.remove(unique_inventory, k)
+                                break
+                            end
+                        end
+                        -- Adjust scroll if needed
+                        local max_scroll = math.max(0, #unique_inventory - items_per_page)
+                        inventory_state.scroll_offset = math.min(inventory_state.scroll_offset, max_scroll)
+                    end
+                    
+                    print("Deposited " .. fish .. " to caught fish!")
+                end
+                
+                -- Move to next row
+                current_y = current_y + 35
+            end
+            
+            -- Scroll down button
+            if inventory_state.scroll_offset < max_scroll then
+                if suit.Button("▼ Scroll Down", suit.layout:row(400, 30)).hit then
+                    inventory_state.scroll_offset = math.min(max_scroll, inventory_state.scroll_offset + 3)
+                end
+            else
+                suit.Label("", {align = "center"}, suit.layout:row(400, 30)) -- Spacer
+            end
+            
+            -- Show scroll position indicator
+            if #unique_inventory > items_per_page then
+                local scroll_info = string.format("Showing %d-%d of %d fish", start_index, end_index, #unique_inventory)
+                suit.Label(scroll_info, {align = "center"}, suit.layout:row(400, 20))
+            end
+        end
+        
+        -- Back button
+        suit.layout:reset(window_width/2 - 100, window_height - 100)
+        if suit.Button("Back", suit.layout:row(200, 30)).hit then
+            inventory_state.mode = ""
+            inventory_state.scroll_offset = 0  -- Reset scroll when leaving
+        end
+        
+    else
+        -- Regular shop interface (only when inventory_state.mode == "")
     
     -- Calculate layout dimensions
     local section_width = 250
@@ -316,6 +526,25 @@ function shop.update(game_state, player_ship, shopkeeper)
         suit.Label("No fainted crew", {align = "center"}, suit.layout:row(section_width, 30))
     end
     suit.Label("Fainted: " .. player_ship.fainted_men, {align = "center"}, suit.layout:row(section_width, 30))
+    
+    -- Inventory Section (third row center)
+    suit.layout:reset(grid_start_x + section_width + padding, row3_y)
+    suit.Label("Fish Inventory", {align = "center"}, suit.layout:row(section_width, 30))
+    if suit.Button("Transfer to Inventory", suit.layout:row(section_width, 30)).hit then
+        inventory_state.mode = "transfer"
+        inventory_state.search_text.text = ""
+        inventory_state.selected_fish = nil
+        -- Create filtered fish list
+        inventory_state.filtered_fish = {}
+        for _, fish in ipairs(player_ship.caught_fish) do
+            table.insert(inventory_state.filtered_fish, fish)
+        end
+    end
+    if suit.Button("View Inventory", suit.layout:row(section_width, 30)).hit then
+        inventory_state.mode = "view"
+    end
+    
+    end -- Close the else block for regular shop interface
 end
 
 -- Draw the physical shops in the game world
@@ -366,8 +595,9 @@ end
 -- Draw the shop UI overlay
 function shop.draw_ui()
     if current_state == "shop" then
-        -- Draw full-screen semi-transparent background
-        love.graphics.setColor(0, 0, 0, 0.85)
+        -- Draw full-screen semi-transparent background (darker for inventory)
+        local alpha = inventory_state.mode ~= "" and 0.9 or 0.85
+        love.graphics.setColor(0, 0, 0, alpha)
         love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
         love.graphics.setColor(1, 1, 1, 1)
         
@@ -385,5 +615,11 @@ function shop.reset()
     show_no_fish_message = false
     message_timer = 0
     coins = 0
+    
+    -- Reset inventory state
+    inventory_state.mode = ""
+    inventory_state.search_text.text = ""
+    inventory_state.selected_fish = nil
+    inventory_state.filtered_fish = {}
 end
 return shop
