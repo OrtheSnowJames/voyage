@@ -231,17 +231,21 @@ function ripples:spawn(x, y)
     local viewWidth = love.graphics.getWidth() / camera.scale
     local viewHeight = love.graphics.getHeight() / camera.scale
     
-    -- Generate position within and slightly outside viewport if not specified
-    local ripple_x = x or (viewLeft - self.spawnMargin + math.random() * (viewWidth + 2 * self.spawnMargin))
-    local ripple_y = y or (viewTop - self.spawnMargin + math.random() * (viewHeight + 2 * self.spawnMargin))
+    -- Spawn below the viewport, moving toward shore
+    local ripple_x = x or (viewLeft + math.random() * viewWidth)
+    local ripple_y = y or (viewTop + viewHeight + self.spawnMargin)
+    
+    -- Always move toward shore (upward)
+    local speed = love.math.random(20, 40)
     
     table.insert(self.particles, {
         x = ripple_x,
         y = ripple_y,
-        radius = love.math.random(5, 15),
-        maxRadius = love.math.random(30, 60),
-        speed = love.math.random(20, 40),
-        alpha = 1
+        vy = -speed,  -- negative = moving up toward shore
+        size = love.math.random(3, 6),
+        alpha = 1,
+        maxLife = love.math.random(3, 6),
+        life = 0
     })
 end
 
@@ -260,15 +264,20 @@ function ripples:update(dt)
     
     for i = #self.particles, 1, -1 do
         local p = self.particles[i]
-        p.radius = p.radius + p.speed * dt
-        p.alpha = 1 - (p.radius / p.maxRadius)
         
-        -- Remove particles that are either too big or outside viewport with margin
-        if p.radius >= p.maxRadius or
+        -- Move toward shore (upward)
+        p.y = p.y + p.vy * dt
+        
+        -- Update lifetime and alpha
+        p.life = p.life + dt
+        p.alpha = 1 - (p.life / p.maxLife)
+        
+        -- Remove particles that reached shore, are too old, or outside viewport
+        if p.life >= p.maxLife or
+           p.y <= shore_division or  -- reached shore
            p.x < viewLeft - self.spawnMargin or
            p.x > viewLeft + viewWidth + self.spawnMargin or
-           p.y < viewTop - self.spawnMargin or
-           p.y > viewTop + viewHeight + self.spawnMargin then
+           p.y < viewTop - self.spawnMargin then
             table.remove(self.particles, i)
         end
     end
@@ -281,15 +290,25 @@ function ripples:draw()
     local viewWidth = love.graphics.getWidth() / camera.scale
     local viewHeight = love.graphics.getHeight() / camera.scale
     
-    love.graphics.setLineWidth(2)
+    love.graphics.setLineWidth(1)
     for _, p in ipairs(self.particles) do
         -- Only draw ripples that are visible in viewport (with margin)
         if p.x >= viewLeft - self.spawnMargin and
            p.x <= viewLeft + viewWidth + self.spawnMargin and
            p.y >= viewTop - self.spawnMargin and
            p.y <= viewTop + viewHeight + self.spawnMargin then
-            love.graphics.setColor(1, 1, 1, p.alpha * 0.3)
-            love.graphics.circle("line", p.x, p.y, p.radius)
+            love.graphics.setColor(1, 1, 1, p.alpha * 0.5)
+            
+            -- Draw little wave pattern like:
+            --  ☐☐
+            -- ☐  ☐
+            local s = p.size
+            -- Top two dots
+            love.graphics.rectangle("fill", p.x - s, p.y - s, s/2, s/2)
+            love.graphics.rectangle("fill", p.x + s/2, p.y - s, s/2, s/2)
+            -- Bottom side dots
+            love.graphics.rectangle("fill", p.x - s*1.5, p.y, s/2, s/2)
+            love.graphics.rectangle("fill", p.x + s, p.y, s/2, s/2)
         end
     end
     love.graphics.setColor(1, 1, 1, 1)

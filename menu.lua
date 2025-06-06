@@ -84,13 +84,17 @@ end
 function ripples:spawn()
     if #self.particles >= self.maxParticles then return end
     
+    -- Spawn at bottom, move up
+    local speed = love.math.random(20, 40)
+    
     table.insert(self.particles, {
         x = math.random() * love.graphics.getWidth(),
-        y = math.random() * love.graphics.getHeight(),
-        radius = love.math.random(5, 15),
-        maxRadius = love.math.random(30, 60),
-        speed = love.math.random(20, 40),
-        alpha = 1
+        y = love.graphics.getHeight() + 50,
+        vy = -speed,  -- move upward
+        size = love.math.random(3, 6),
+        alpha = 1,
+        maxLife = love.math.random(3, 6),
+        life = 0
     })
 end
 
@@ -103,20 +107,36 @@ function ripples:update(dt)
     
     for i = #self.particles, 1, -1 do
         local p = self.particles[i]
-        p.radius = p.radius + p.speed * dt
-        p.alpha = 1 - (p.radius / p.maxRadius)
         
-        if p.radius >= p.maxRadius then
+        -- Move upward
+        p.y = p.y + p.vy * dt
+        
+        -- Update lifetime and alpha
+        p.life = p.life + dt
+        p.alpha = 1 - (p.life / p.maxLife)
+        
+        -- Remove particles that are too old or moved off screen
+        if p.life >= p.maxLife or p.y < -50 then
             table.remove(self.particles, i)
         end
     end
 end
 
 function ripples:draw()
-    love.graphics.setLineWidth(2)
+    love.graphics.setLineWidth(1)
     for _, p in ipairs(self.particles) do
-        love.graphics.setColor(1, 1, 1, p.alpha * 0.3)
-        love.graphics.circle("line", p.x, p.y, p.radius)
+        love.graphics.setColor(1, 1, 1, p.alpha * 0.5)
+        
+        -- Draw little wave pattern like:
+        --  ☐☐
+        -- ☐  ☐
+        local s = p.size
+        -- Top two dots
+        love.graphics.rectangle("fill", p.x - s, p.y - s, s/2, s/2)
+        love.graphics.rectangle("fill", p.x + s/2, p.y - s, s/2, s/2)
+        -- Bottom side dots
+        love.graphics.rectangle("fill", p.x - s*1.5, p.y, s/2, s/2)
+        love.graphics.rectangle("fill", p.x + s, p.y, s/2, s/2)
     end
     love.graphics.setColor(1, 1, 1, 1)
 end
