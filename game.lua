@@ -98,6 +98,11 @@ local player_ship = {
 
 local shore_division = 60 -- what separates water from land (land is above this value)
 
+-- Load shore texture
+local shore_texture = love.graphics.newImage("assets/shore.png")
+local shore_width = shore_texture:getWidth()
+local shore_height = shore_texture:getHeight()
+
 -- ripple system
 local ripples = {
     particles = {},
@@ -272,12 +277,11 @@ function ripples:update(dt)
         p.life = p.life + dt
         p.alpha = 1 - (p.life / p.maxLife)
         
-        -- Remove particles that reached shore, are too old, or outside viewport
+        -- Remove particles that are too old or completely out of view
         if p.life >= p.maxLife or
-           p.y <= shore_division or  -- reached shore
            p.x < viewLeft - self.spawnMargin or
            p.x > viewLeft + viewWidth + self.spawnMargin or
-           p.y < viewTop - self.spawnMargin then
+           p.y < viewTop - self.spawnMargin * 2 then  -- Let them go well past the top
             table.remove(self.particles, i)
         end
     end
@@ -559,10 +563,10 @@ end
 
 -- Water colors for different times of day
 local waterColors = {
-    dawn = {0.4, 0.3, 0.3},    -- Subtle orange-blue mix for sunrise (0:00)
-    day = {0.04, 0.04, 0.2},   -- Bright blue (6:00)
-    dusk = {0.3, 0.2, 0.3},    -- Purple-blue for evening (11:00)
-    night = {0.02, 0.02, 0.1}  -- Dark blue for night (12:00)
+    dawn = {0.3, 0.2, 0.4},    -- Purple-orange mix for sunrise (0:00)
+    day = {0.05, 0.1, 0.3},    -- Bright blue (6:00)
+    dusk = {0.2, 0.1, 0.3},    -- Purple-blue for evening (11:00)
+    night = {0.01, 0.02, 0.08} -- Very dark blue for night (12:00)
 }
 
 -- Function to get current water color based on time
@@ -594,6 +598,35 @@ local function getCurrentWaterColor()
         }
     else  -- Night (12)
         return waterColors.night
+    end
+end
+
+-- Function to get ambient light intensity (for glow effects)
+local function getAmbientLight()
+    local timeOfDay = (player_ship.time_system.time / player_ship.time_system.DAY_LENGTH) * 12
+    
+    if timeOfDay >= 0 and timeOfDay < 2 then  -- Dawn
+        return 0.3 + (timeOfDay / 2) * 0.4  -- 0.3 to 0.7
+    elseif timeOfDay >= 2 and timeOfDay < 10 then  -- Day
+        return 1.0  -- Full brightness
+    elseif timeOfDay >= 10 and timeOfDay < 12 then  -- Dusk to night
+        return 1.0 - ((timeOfDay - 10) / 2) * 0.7  -- 1.0 to 0.3
+    else  -- Night
+        return 0.3  -- Dim
+    end
+end
+
+-- Function to draw ship glow effect
+local function drawShipGlow(x, y, radius, color, intensity)
+    local glowRadius = radius * 2.5
+    local segments = 20
+    
+    -- Draw multiple layered circles for glow effect
+    for i = 1, 3 do
+        local currentRadius = glowRadius * (1 - i * 0.2)
+        local alpha = (intensity * 0.1) / i
+        love.graphics.setColor(color[1], color[2], color[3], alpha)
+        love.graphics.circle("fill", x, y, currentRadius, segments)
     end
 end
 
@@ -860,39 +893,59 @@ function game.draw()
     
     -- Only draw game world if not sleeping
     if not player_ship.time_system.is_sleeping then
-        -- Draw the shore
-        -- Calculate shore dimensions based on camera view
+        -- Draw the shore using repeating texture
         local viewWidth = love.graphics.getWidth() / camera.scale
         local viewHeight = love.graphics.getHeight() / camera.scale
         local shoreExtension = 1000 -- How far the shore extends beyond the viewport
         
-        -- Draw sand-colored rectangle for shore area
-        love.graphics.setColor(0.87, 0.84, 0.69) -- Warm sand color
-        love.graphics.rectangle("fill",
-            camera.x - shoreExtension,  -- Left edge (extend past viewport)
-            -1000,  -- Extend well above viewport
-            viewWidth + shoreExtension * 2,  -- Width (extend both directions)
-            shore_division + 1000  -- Height (include the extension)
-        )
+        -- Calculate how many times we need to repeat the shore texture
+        local total_width = viewWidth + shoreExtension * 2
+        local start_x = camera.x - shoreExtension
+        local shore_top = -1000  -- Extend well above viewport
+        local shore_bottom = shore_division
         
-        -- Draw shore edge line
-        love.graphics.setColor(0.3, 0.3, 0.5)
-        love.graphics.setLineWidth(2)
-        love.graphics.line(
-            camera.x - shoreExtension, shore_division,
-            camera.x + viewWidth + shoreExtension, shore_division
-        )
+        -- Find the leftmost position to start drawing (aligned to texture width)
+        local aligned_start_x = math.floor(start_x / shore_width) * shore_width
+        local num_repeats = math.ceil(total_width / shore_width) + 2  -- +2 for safety margin
+        
+        love.graphics.setColor(1, 1, 1, 1)  -- Full white tint
+        
+        -- Draw repeating shore texture
+        for i = 0, num_repeats do
+            local x = aligned_start_x + (i * shore_width)
+            
+            -- Scale the texture vertically to fill from shore_top to shore_division
+            local scale_y = (shore_bottom - shore_top) / shore_height
+            
+            love.graphics.draw(shore_texture, x, shore_top, 0, 1, scale_y)
+        end
         
         -- Draw the shopkeeper
         shopkeeper:draw()
 
+        -- Get ambient light for glow effects
+        local ambientLight = getAmbientLight()
+        local glowIntensity = math.max(0, 1 - ambientLight) -- Stronger glow at night
+        
         -- Draw enemy ships
         if not gameState.combat.is_active then
+            -- Draw enemy glow effects first
+            if glowIntensity > 0 then
+                local enemies = spawnenemy.get_enemies()
+                for _, enemy in ipairs(enemies) do
+                    drawShipGlow(enemy.x, enemy.y, enemy.radius, {1, 0.5, 0.5}, glowIntensity)
+                end
+            end
             -- Draw all enemies normally when not in combat
             spawnenemy.draw()
         else
             -- During combat, only draw the enemy we're fighting
             if gameState.combat.enemy then
+                -- Draw enemy glow
+                if glowIntensity > 0 then
+                    drawShipGlow(gameState.combat.enemy.x, gameState.combat.enemy.y, gameState.combat.enemy.radius, {1, 0.5, 0.5}, glowIntensity)
+                end
+                
                 love.graphics.setColor(1, 0, 0, 1)
                 
                 -- Save current transform
@@ -913,13 +966,47 @@ function game.draw()
                 love.graphics.pop()
                 
                 -- Draw crew size text (always upright)
-                love.graphics.setColor(1, 1, 1, 1)
                 local text = tostring(gameState.combat.enemy.size)
                 local font = love.graphics.getFont()
                 local text_width = font:getWidth(text)
-                love.graphics.print(text, 
-                    gameState.combat.enemy.x - text_width/2,
-                    gameState.combat.enemy.y - font:getHeight()/2)
+                local text_height = font:getHeight()
+                local text_x = gameState.combat.enemy.x - text_width/2
+                local text_y = gameState.combat.enemy.y - text_height/2
+                
+                -- Draw inverted background
+                local waterColor = getCurrentWaterColor()
+                local inverted_r = 1 - waterColor[1]
+                local inverted_g = 1 - waterColor[2]
+                local inverted_b = 1 - waterColor[3]
+                love.graphics.setColor(inverted_r, inverted_g, inverted_b, 0.8)
+                love.graphics.rectangle("fill", text_x - 2, text_y - 1, text_width + 4, text_height + 2)
+                
+                -- Draw text
+                love.graphics.setColor(1, 1, 1, 1)
+                love.graphics.print(text, text_x, text_y)
+            end
+        end
+        
+        -- Draw player ship glow effect
+        if glowIntensity > 0 then
+            drawShipGlow(player_ship.x, player_ship.y, player_ship.radius, {0.5, 0.8, 1}, glowIntensity)
+        end
+        
+        -- Draw ship wake trail if moving
+        local ship_speed = math.sqrt(player_ship.velocity_x^2 + player_ship.velocity_y^2)
+        if ship_speed > 10 then
+            local wake_length = math.min(ship_speed * 0.5, 60)
+            local wake_direction = math.atan2(-player_ship.velocity_y, -player_ship.velocity_x)
+            
+            -- Draw wake trail
+            love.graphics.setColor(1, 1, 1, 0.2 * (glowIntensity * 0.5 + 0.5))
+            for i = 1, 3 do
+                local offset = i * 15
+                local wake_x = player_ship.x + math.cos(wake_direction) * offset
+                local wake_y = player_ship.y + math.sin(wake_direction) * offset
+                local wake_width = (4 - i) * 2
+                
+                love.graphics.circle("fill", wake_x, wake_y, wake_width)
             end
         end
         
@@ -1054,10 +1141,23 @@ function game.draw()
         -- Draw catch texts
         for _, catch in ipairs(catch_texts) do
             local alpha = catch.time / game_config.fishing_cooldown  -- Fade out over time
+            local font = love.graphics.getFont()
+            local text_width = font:getWidth(catch.text)
+            local text_height = font:getHeight()
+            local text_x = player_ship.x - 40
+            local text_y = player_ship.y - 60 - catch.y_offset
+            
+            -- Draw inverted background
+            local waterColor = getCurrentWaterColor()
+            local inverted_r = 1 - waterColor[1]
+            local inverted_g = 1 - waterColor[2]
+            local inverted_b = 1 - waterColor[3]
+            love.graphics.setColor(inverted_r, inverted_g, inverted_b, alpha * 0.8)
+            love.graphics.rectangle("fill", text_x - 2, text_y - 1, text_width + 4, text_height + 2)
+            
+            -- Draw text
             love.graphics.setColor(1, 1, 1, alpha)
-            love.graphics.print(catch.text, 
-                player_ship.x - 40, 
-                player_ship.y - 60 - catch.y_offset)
+            love.graphics.print(catch.text, text_x, text_y)
         end
         
         -- Draw fishing cooldown indicator if on cooldown

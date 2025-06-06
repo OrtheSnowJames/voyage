@@ -154,12 +154,21 @@ function spawnenemy.draw()
         -- restore transform before drawing text
         love.graphics.pop()
         
-        -- draw crew size text (always upright)
-        love.graphics.setColor(1, 1, 1, 1)
+        -- draw crew size text (always upright) with inverted background
         local text = tostring(enemy.size)
         local font = love.graphics.getFont()
         local text_width = font:getWidth(text)
-        love.graphics.print(text, enemy.x - text_width/2, enemy.y - font:getHeight()/2)
+        local text_height = font:getHeight()
+        local text_x = enemy.x - text_width/2
+        local text_y = enemy.y - text_height/2
+        
+        -- Draw inverted background (we'll use a dark blue water approximation since we don't have getCurrentWaterColor here)
+        love.graphics.setColor(0.8, 0.8, 0.8, 0.8)  -- Light gray background
+        love.graphics.rectangle("fill", text_x - 2, text_y - 1, text_width + 4, text_height + 2)
+        
+        -- Draw text
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.print(text, text_x, text_y)
     end
     
     -- reset color

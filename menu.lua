@@ -12,10 +12,10 @@ local state = {
 
 -- Water colors for different times of day
 local waterColors = {
-    dawn = {0.4, 0.3, 0.3},    -- Subtle orange-blue mix for sunrise (0:00)
-    day = {0.04, 0.04, 0.2},   -- Bright blue (6:00)
-    dusk = {0.3, 0.2, 0.3},    -- Purple-blue for evening (11:00)
-    night = {0.02, 0.02, 0.1}  -- Dark blue for night (12:00)
+    dawn = {0.3, 0.2, 0.4},    -- Purple-orange mix for sunrise (0:00)
+    day = {0.05, 0.1, 0.3},    -- Bright blue (6:00)
+    dusk = {0.2, 0.1, 0.3},    -- Purple-blue for evening (11:00)
+    night = {0.01, 0.02, 0.08} -- Very dark blue for night (12:00)
 }
 
 -- Linear interpolation helper function

@@ -108,10 +108,6 @@ function combat.combat(crew_size, enemy_size, sword_level, top_sword_level)
     local random_multiplier = 0.7 + (math.random() * 0.3)  -- 0.7 to 1.0
     local fainted = math.floor(base_fainted * random_multiplier)
     
-    -- Better swords reduce fainted count slightly
-    local sword_reduction = math.floor(sword_effectiveness * 2)  -- up to 2 reduction with best sword
-    fainted = math.max(0, fainted - sword_reduction)
-    
     -- Calculate actual casualties - much lower chance with better crew advantage
     local actual_casualties = 0
     if crew_size < enemy_size * 1.5 then  -- only if crew advantage is small
@@ -121,17 +117,21 @@ function combat.combat(crew_size, enemy_size, sword_level, top_sword_level)
         end
     end
     
+    -- Better swords reduce our casualties (deaths), not enemy fainted count
+    local sword_reduction = math.floor(sword_effectiveness * 2)  -- up to 2 reduction with best sword
+    actual_casualties = math.max(0, actual_casualties - sword_reduction)
+    
     -- Better swords can prevent casualties entirely
     if actual_casualties > 0 and sword_level >= 3 then  -- Great Sword or better
         if math.random(1, 10) <= sword_level then  -- higher level = better chance to prevent death
             actual_casualties = 0
-            fainted = fainted + 1  -- convert death to fainted
         end
     end
     
-    print("Fainted: " .. fainted)
-    print("Sword Reduction: " .. sword_reduction)
-    print("Actual Casualties: " .. actual_casualties)
+    print("Enemy Fainted: " .. fainted)
+    print("Our Casualties (before sword reduction): " .. (actual_casualties + sword_reduction))
+    print("Sword Reduction: " .. sword_reduction) 
+    print("Final Casualties: " .. actual_casualties)
     
     return {
         victory = true,
