@@ -108,8 +108,9 @@ local ripples = {
     particles = {},
     maxParticles = 50,
     spawnTimer = 0,
-    spawnRate = 0.5, -- seconds between spawns
-    spawnMargin = 100 -- spawn ripples slightly outside view
+    baseSpawnRate = 0.3, -- base seconds between spawns
+    spawnMargin = 100, -- spawn ripples slightly outside view
+    minVisibleRipples = 5 -- minimum ripples to keep on screen
 }
 
 -- port-a-shop configuration
@@ -227,7 +228,7 @@ local function reset_game()
     shopkeeper.is_spawned = false
 end
 
-function ripples:spawn(x, y)
+function ripples:spawn(player_ship, x, y)
     if #self.particles >= self.maxParticles then return end
     
     -- Get viewport boundaries (in world coordinates)
@@ -236,37 +237,110 @@ function ripples:spawn(x, y)
     local viewWidth = love.graphics.getWidth() / camera.scale
     local viewHeight = love.graphics.getHeight() / camera.scale
     
-    -- Spawn below the viewport, moving toward shore
+    -- Default spawn position and movement
     local ripple_x = x or (viewLeft + math.random() * viewWidth)
     local ripple_y = y or (viewTop + viewHeight + self.spawnMargin)
+    local ripple_vy = -love.math.random(20, 40)  -- default: move toward shore (upward)
     
-    -- Always move toward shore (upward)
-    local speed = love.math.random(20, 40)
+    -- If player_ship is provided, make spawning direction-aware
+    if player_ship and not x and not y then
+        -- Calculate player movement direction
+        local player_speed = math.sqrt(player_ship.velocity_x^2 + player_ship.velocity_y^2)
+        
+        -- Determine if player is moving toward or away from shore
+        local moving_toward_shore = player_ship.velocity_y < -10  -- moving upward significantly
+        local moving_away_from_shore = player_ship.velocity_y > 10  -- moving downward significantly
+        
+        if moving_toward_shore then
+            -- Player moving toward shore: spawn ripples ahead (above viewport)
+            ripple_y = viewTop - self.spawnMargin
+            ripple_vy = -love.math.random(20, 40)  -- still move toward shore
+        elseif moving_away_from_shore then
+            -- Player moving away from shore: spawn ripples ahead (below viewport)  
+            ripple_y = viewTop + viewHeight + self.spawnMargin
+            ripple_vy = -love.math.random(20, 40)  -- still move toward shore
+        else
+            -- Player not moving much vertically: spawn randomly above or below
+            if math.random() < 0.5 then
+                ripple_y = viewTop - self.spawnMargin  -- above
+            else
+                ripple_y = viewTop + viewHeight + self.spawnMargin  -- below
+            end
+            ripple_vy = -love.math.random(20, 40)
+        end
+        
+        -- If player is moving fast, spawn ripples more around the player's area
+        if player_speed > 50 then
+            -- Spawn in a wider area around the player's X position
+            local spawn_range = math.min(viewWidth, 400) -- limit spawn range
+            ripple_x = player_ship.x + (math.random() - 0.5) * spawn_range
+        end
+    end
     
-    table.insert(self.particles, {
-        x = ripple_x,
-        y = ripple_y,
-        vy = -speed,  -- negative = moving up toward shore
-        size = love.math.random(3, 6),
-        alpha = 1,
-        maxLife = love.math.random(3, 6),
-        life = 0
-    })
+    -- Spawn 3 ripples: center, left, and right
+    local spacing = 50 + math.random() * 100  -- 50-150 units apart
+    local positions = {
+        {x = ripple_x - spacing, y = ripple_y},  -- left
+        {x = ripple_x, y = ripple_y},            -- center (original)
+        {x = ripple_x + spacing, y = ripple_y}   -- right
+    }
+    
+    for _, pos in ipairs(positions) do
+        if #self.particles < self.maxParticles then
+            table.insert(self.particles, {
+                x = pos.x,
+                y = pos.y,
+                vy = ripple_vy + love.math.random(-5, 5),  -- slight variation in speed
+                size = love.math.random(3, 6),
+                alpha = 1,
+                maxLife = love.math.random(3, 6),
+                life = 0
+            })
+        end
+    end
 end
 
-function ripples:update(dt)
-    self.spawnTimer = self.spawnTimer + dt
-    if self.spawnTimer >= self.spawnRate then
-        self:spawn()
-        self.spawnTimer = 0
-    end
-
+function ripples:update(dt, player_ship)
+    -- Calculate player speed
+    local player_speed = math.sqrt(player_ship.velocity_x^2 + player_ship.velocity_y^2)
+    
+    -- Adjust spawn rate based on speed (faster player = faster spawning)
+    local speed_multiplier = 1 + (player_speed / 100) -- faster spawning when moving faster
+    local current_spawn_rate = self.baseSpawnRate / speed_multiplier
+    
     -- Get viewport boundaries
     local viewLeft = camera.x
     local viewTop = camera.y
     local viewWidth = love.graphics.getWidth() / camera.scale
     local viewHeight = love.graphics.getHeight() / camera.scale
     
+    -- Count visible ripples (ripples currently on screen)
+    local visible_ripples = 0
+    for _, p in ipairs(self.particles) do
+        if p.x >= viewLeft - self.spawnMargin and
+           p.x <= viewLeft + viewWidth + self.spawnMargin and
+           p.y >= viewTop - self.spawnMargin and
+           p.y <= viewTop + viewHeight + self.spawnMargin then
+            visible_ripples = visible_ripples + 1
+        end
+    end
+    
+    -- Regular spawning based on timer
+    self.spawnTimer = self.spawnTimer + dt
+    if self.spawnTimer >= current_spawn_rate then
+        self:spawn(player_ship)
+        self.spawnTimer = 0
+    end
+    
+    -- "Catch up" spawning - if we have fewer than minimum visible ripples, spawn more immediately
+    if visible_ripples < self.minVisibleRipples then
+        local needed_ripples = self.minVisibleRipples - visible_ripples
+        for i = 1, needed_ripples do
+            self:spawn(player_ship)
+        end
+    end
+    
+    -- Update existing ripples
     for i = #self.particles, 1, -1 do
         local p = self.particles[i]
         
@@ -781,7 +855,7 @@ function game.update(dt)
         -- Some Mechs
         fish(dt)
 
-        ripples:update(dt)
+        ripples:update(dt, player_ship)
     end
     
     -- Handle combat state
