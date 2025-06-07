@@ -105,6 +105,16 @@ local function get_speed_upgrade_cost(current_speed)
     return math.floor(25 * (1.5 ^ (upgrade_level - 1)))
 end
 
+-- calculate cost for fishing cooldown upgrade
+local function get_cooldown_upgrade_cost(current_cooldown)
+    -- start with base cooldown of 5, each upgrade reduces by 0.1 seconds
+    -- calculate level based on how much it's been reduced from base (5 seconds)
+    local base_cooldown = 5.0
+    local upgrade_level = math.floor((base_cooldown - current_cooldown) * 10) + 1
+    -- start exponential immediately with base cost of 20
+    return math.floor(20 * (1.5 ^ (upgrade_level - 1)))
+end
+
 -- filter fish based on search text
 local function filter_fish(fish_list, search_text)
     if search_text == "" then
@@ -160,7 +170,7 @@ local function check_shop_interaction(player_x, player_y, shopkeeper)
     return any_shop_active
 end
 
-function shop.update(game_state, player_ship, shopkeeper)
+function shop.update(game_state, player_ship, shopkeeper, game_config)
     -- update animation timers for all shops
     local dt = love.timer.getDelta()
     
@@ -537,8 +547,27 @@ function shop.update(game_state, player_ship, shopkeeper)
     -- third row
     local row3_y = row2_y + section_height + padding
     
-    -- healing section (third row left)
+    -- cooldown upgrade section (third row left)
     suit.layout:reset(grid_start_x, row3_y)
+    suit.Label("Fishing Cooldown", {align = "center"}, suit.layout:row(section_width, 30))
+    local cooldown_cost = get_cooldown_upgrade_cost(game_config.fishing_cooldown)
+    if game_config.fishing_cooldown > 1.0 then  -- minimum cooldown of 1 second
+        if coins >= cooldown_cost then
+            if suit.Button("Reduce Cooldown (" .. cooldown_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
+                coins = coins - cooldown_cost
+                game_config.fishing_cooldown = math.max(1.0, game_config.fishing_cooldown - 0.1)  -- reduce by 0.1s, min 1.0s
+                print("Reduced fishing cooldown to: " .. game_config.fishing_cooldown .. "s")
+            end
+        else
+            suit.Label("Need " .. cooldown_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
+        end
+    else
+        suit.Label("Cooldown fully upgraded", {align = "center"}, suit.layout:row(section_width, 30))
+    end
+    suit.Label("Current: " .. string.format("%.1f", game_config.fishing_cooldown) .. " seconds", {align = "center"}, suit.layout:row(section_width, 30))
+    
+    -- healing section (third row center)
+    suit.layout:reset(grid_start_x + section_width + padding, row3_y)
     suit.Label("Pharmacy", {align = "center"}, suit.layout:row(section_width, 30))
     local healing_cost = player_ship.fainted_men * 10
     if player_ship.fainted_men > 0 then
@@ -557,8 +586,8 @@ function shop.update(game_state, player_ship, shopkeeper)
     end
     suit.Label("Fainted: " .. player_ship.fainted_men, {align = "center"}, suit.layout:row(section_width, 30))
     
-    -- inventory section (third row center)
-    suit.layout:reset(grid_start_x + section_width + padding, row3_y)
+    -- inventory section (third row right)
+    suit.layout:reset(grid_start_x + (section_width + padding) * 2, row3_y)
     suit.Label("Fish Inventory", {align = "center"}, suit.layout:row(section_width, 30))
     if suit.Button("Transfer to Inventory", suit.layout:row(section_width, 30)).hit then
         inventory_state.mode = "transfer"

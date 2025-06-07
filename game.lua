@@ -930,7 +930,7 @@ function game.update(dt)
         shopkeeper:update(player_ship.x, player_ship.y, dt)
         
         -- update shop
-        local new_state = shop.update(gameState, player_ship, shopkeeper)
+        local new_state = shop.update(gameState, player_ship, shopkeeper, game_config)
         if new_state then
             return new_state
         end
