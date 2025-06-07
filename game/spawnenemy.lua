@@ -11,7 +11,7 @@ local SHORE_DIVISION = 60  -- match the shore_division from game.lua
 local MIN_SHORE_DISTANCE = 40  -- minimum distance from shore (match player ship restriction)
 local SHOP_SAFE_DISTANCE = 50  -- minimum distance from shops for enemy spawns
 
--- Load enemy boat sprite
+-- load enemy boat sprite
 local enemy_boat_sprite = love.graphics.newImage("assets/boat.png")
 
 local enemies = {}  -- table to store active enemies
@@ -27,20 +27,20 @@ local function generate_enemy_size(player_y)
     return math.max(1, math.floor(base_size + math.random(-1, 2)))
 end
 
--- Add helper function to check if a Y position is too close to shops
+-- add helper function to check if a y position is too close to shops
 local function is_near_shop(y)
-    -- Check main shopkeeper position (always at shore_division)
+    -- check main shopkeeper position (always at shore_division)
     if math.abs(y - SHORE_DIVISION) <= SHOP_SAFE_DISTANCE then
         return true
     end
     
-    -- Check port-a-shop positions (every 1000 units)
+    -- check port-a-shop positions (every 1000 units)
     local shop_y = math.floor(y / 1000) * 1000
     if math.abs(y - shop_y) <= SHOP_SAFE_DISTANCE then
         return true
     end
     
-    -- Also check the next shop level up and down
+    -- also check the next shop level up and down
     if math.abs(y - (shop_y + 1000)) <= SHOP_SAFE_DISTANCE or
        math.abs(y - (shop_y - 1000)) <= SHOP_SAFE_DISTANCE then
         return true
@@ -49,11 +49,11 @@ local function is_near_shop(y)
     return false
 end
 
--- Add helper function to calculate enemy speed based on depth
+-- add helper function to calculate enemy speed based on depth
 local function calculate_enemy_speed(y_position)
     local depth_level = math.floor(math.abs(y_position) / 1000)
     local speed_multiplier = 1 + (depth_level * SPEED_INCREASE_PER_LEVEL / BASE_ENEMY_SPEED)
-    -- Cap the multiplier to prevent excessive speeds
+    -- cap the multiplier to prevent excessive speeds
     speed_multiplier = math.min(speed_multiplier, MAX_SPEED_MULTIPLIER)
     return BASE_ENEMY_SPEED * speed_multiplier
 end
@@ -84,13 +84,13 @@ function spawnenemy.update(dt, camera, player_x, player_y)
             direction = -1  -- moving left
         end
         
-        -- calculate valid Y range for spawning
-        local min_y = math.max(200, camera.y)  -- minimum Y position (at least 200)
-        local max_y = camera.y + view_height - SPAWN_MARGIN  -- maximum Y position (within view)
+        -- calculate valid y range for spawning
+        local min_y = math.max(200, camera.y)  -- minimum y position (at least 200)
+        local max_y = camera.y + view_height - SPAWN_MARGIN  -- maximum y position (within view)
         
         -- only spawn if there's valid space
         if max_y > min_y then
-            -- Try to find a valid spawn position
+            -- try to find a valid spawn position
             local max_attempts = 10
             local spawn_y = nil
             
@@ -102,9 +102,9 @@ function spawnenemy.update(dt, camera, player_x, player_y)
                 end
             end
             
-            -- Only spawn if we found a valid position
+            -- only spawn if we found a valid position
             if spawn_y then
-                -- Calculate speed based on depth
+                -- calculate speed based on depth
                 local enemy_speed = calculate_enemy_speed(spawn_y)
                 
                 -- create new enemy
@@ -114,7 +114,7 @@ function spawnenemy.update(dt, camera, player_x, player_y)
                     direction = direction,
                     size = generate_enemy_size(player_y),
                     radius = ENEMY_SIZE,
-                    speed = enemy_speed  -- Store individual enemy speed
+                    speed = enemy_speed  -- store individual enemy speed
                 })
             end
         end
@@ -144,8 +144,8 @@ function spawnenemy.draw()
         love.graphics.translate(enemy.x, enemy.y)
         love.graphics.rotate((enemy.direction > 0 and 0 or math.pi) + math.pi)  -- rotate based on direction + 180° for boat sprite
         
-        -- Draw enemy boat sprite with red tint
-        love.graphics.setColor(1, 0, 0, 1)  -- Red color filter
+        -- draw enemy boat sprite with red tint
+        love.graphics.setColor(1, 0, 0, 1)  -- red color filter
         local target_width = 64
         local sprite_scale = target_width / enemy_boat_sprite:getWidth()
         
@@ -154,8 +154,8 @@ function spawnenemy.draw()
             0, 0, -- position (already translated)
             0, -- rotation (already applied)
             sprite_scale, sprite_scale, -- uniform scale to maintain aspect ratio
-            enemy_boat_sprite:getWidth()/2, -- origin X (center)
-            enemy_boat_sprite:getHeight()/2  -- origin Y (center)
+            enemy_boat_sprite:getWidth()/2, -- origin x (center)
+            enemy_boat_sprite:getHeight()/2  -- origin y (center)
         )
         
         -- restore transform before drawing text
@@ -169,11 +169,11 @@ function spawnenemy.draw()
         local text_x = enemy.x - text_width/2
         local text_y = enemy.y - text_height/2
         
-        -- Draw inverted background (we'll use a dark blue water approximation since we don't have getCurrentWaterColor here)
-        love.graphics.setColor(0.8, 0.8, 0.8, 0.8)  -- Light gray background
+        -- draw inverted background (we'll use a dark blue water approximation since we don't have getcurrentwatercolor here)
+        love.graphics.setColor(0.8, 0.8, 0.8, 0.8)  -- light gray background
         love.graphics.rectangle("fill", text_x - 2, text_y - 1, text_width + 4, text_height + 2)
         
-        -- Draw text
+        -- draw text
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.print(text, text_x, text_y)
     end
@@ -190,7 +190,7 @@ function spawnenemy.check_collision(player_x, player_y, player_radius)
         local distance = math.sqrt(dx * dx + dy * dy)
         
         if distance < (player_radius + enemy.radius) then
-            -- Return enemy data without removing it
+            -- return enemy data without removing it
             return enemy
         end
     end

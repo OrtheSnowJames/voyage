@@ -3,59 +3,59 @@ local suit = require "SUIT"
 local serialize = require("game.serialize")
 
 local state = {
-    ship_name = {text = ""},  -- Initialize with text property for SUIT input
-    name_submitted = false,  -- Track if name has been submitted
-    show_error = false,  -- Show error if name is empty
-    time = 0,  -- Track time for water colors
+    ship_name = {text = ""},  -- initialize with text property for suit input
+    name_submitted = false,  -- track if name has been submitted
+    show_error = false,  -- show error if name is empty
+    time = 0,  -- track time for water colors
     DAY_LENGTH = 12 * 60  -- 12 minutes in seconds
 }
 
--- Water colors for different times of day
+-- water colors for different times of day
 local waterColors = {
-    dawn = {0.3, 0.2, 0.4},    -- Purple-orange mix for sunrise (0:00)
-    day = {0.05, 0.1, 0.3},    -- Bright blue (6:00)
-    dusk = {0.2, 0.1, 0.3},    -- Purple-blue for evening (11:00)
-    night = {0.01, 0.02, 0.08} -- Very dark blue for night (12:00)
+    dawn = {0.3, 0.2, 0.4},    -- purple-orange mix for sunrise (0:00)
+    day = {0.05, 0.1, 0.3},    -- bright blue (6:00)
+    dusk = {0.2, 0.1, 0.3},    -- purple-blue for evening (11:00)
+    night = {0.01, 0.02, 0.08} -- very dark blue for night (12:00)
 }
 
--- Linear interpolation helper function
+-- linear interpolation helper function
 local function lerp(a, b, t)
     return a + (b - a) * t
 end
 
--- Function to get current water color based on time
+-- function to get current water color based on time
 local function getCurrentWaterColor()
-    local timeOfDay = (state.time / state.DAY_LENGTH) * 12 -- Convert to 12-hour format
+    local timeOfDay = (state.time / state.DAY_LENGTH) * 12 -- convert to 12-hour format
     
-    if timeOfDay >= 0 and timeOfDay < 1 then  -- Dawn (0-1)
+    if timeOfDay >= 0 and timeOfDay < 1 then  -- dawn (0-1)
         local t = timeOfDay -- 0 to 1
         return {
             lerp(waterColors.dawn[1], waterColors.dawn[1], t),
             lerp(waterColors.dawn[2], waterColors.dawn[2], t),
             lerp(waterColors.dawn[3], waterColors.dawn[3], t)
         }
-    elseif timeOfDay >= 1 and timeOfDay < 6 then  -- Dawn to day (1-6)
-        local t = (timeOfDay - 1) / 5  -- Normalize to 0-1
+    elseif timeOfDay >= 1 and timeOfDay < 6 then  -- dawn to day (1-6)
+        local t = (timeOfDay - 1) / 5  -- normalize to 0-1
         return {
             lerp(waterColors.dawn[1], waterColors.day[1], t),
             lerp(waterColors.dawn[2], waterColors.day[2], t),
             lerp(waterColors.dawn[3], waterColors.day[3], t)
         }
-    elseif timeOfDay >= 6 and timeOfDay < 11 then  -- Day (6-11)
+    elseif timeOfDay >= 6 and timeOfDay < 11 then  -- day (6-11)
         return waterColors.day
-    elseif timeOfDay >= 11 and timeOfDay < 12 then  -- Day to night (11-12)
+    elseif timeOfDay >= 11 and timeOfDay < 12 then  -- day to night (11-12)
         local t = (timeOfDay - 11)  -- 0 to 1
         return {
             lerp(waterColors.day[1], waterColors.dusk[1], t),
             lerp(waterColors.day[2], waterColors.dusk[2], t),
             lerp(waterColors.day[3], waterColors.dusk[3], t)
         }
-    else  -- Night (12)
+    else  -- night (12)
         return waterColors.night
     end
 end
 
--- Check if save file exists at startup
+-- check if save file exists at startup
 local function check_save_file()
     if love.filesystem.getInfo("save.lua") then
         local save_data = serialize.load_data()
@@ -68,7 +68,7 @@ local function check_save_file()
     return false
 end
 
--- Create menu-specific ripple system
+-- create menu-specific ripple system
 local ripples = {
     particles = {},
     maxParticles = 50,
@@ -84,7 +84,7 @@ end
 function ripples:spawn()
     if #self.particles >= self.maxParticles then return end
     
-    -- Spawn at bottom, move up
+    -- spawn at bottom, move up
     local speed = love.math.random(20, 40)
     
     table.insert(self.particles, {
@@ -108,14 +108,14 @@ function ripples:update(dt)
     for i = #self.particles, 1, -1 do
         local p = self.particles[i]
         
-        -- Move upward
+        -- move upward
         p.y = p.y + p.vy * dt
         
-        -- Update lifetime and alpha
+        -- update lifetime and alpha
         p.life = p.life + dt
         p.alpha = 1 - (p.life / p.maxLife)
         
-        -- Remove particles that are too old or moved off screen
+        -- remove particles that are too old or moved off screen
         if p.life >= p.maxLife or p.y < -50 then
             table.remove(self.particles, i)
         end
@@ -127,14 +127,14 @@ function ripples:draw()
     for _, p in ipairs(self.particles) do
         love.graphics.setColor(1, 1, 1, p.alpha * 0.5)
         
-        -- Draw little wave pattern like:
+        -- draw little wave pattern like:
         --  ☐☐
         -- ☐  ☐
         local s = p.size
-        -- Top two dots
+        -- top two dots
         love.graphics.rectangle("fill", p.x - s, p.y - s, s/2, s/2)
         love.graphics.rectangle("fill", p.x + s/2, p.y - s, s/2, s/2)
-        -- Bottom side dots
+        -- bottom side dots
         love.graphics.rectangle("fill", p.x - s*1.5, p.y, s/2, s/2)
         love.graphics.rectangle("fill", p.x + s, p.y, s/2, s/2)
     end
@@ -142,39 +142,39 @@ function ripples:draw()
 end
 
 function menu.load()
-    -- Check save file on enter
+    -- check save file on enter
     check_save_file()
 end
 
 function menu.update(dt)
-    -- Update time
+    -- update time
     state.time = state.time + dt
     if state.time >= state.DAY_LENGTH then
         state.time = 0
     end
 
-    -- Update ripples
+    -- update ripples
     ripples:update(dt)
 
-    -- Reset layout with bigger buttons and more spacing
+    -- reset layout with bigger buttons and more spacing
     local button_width = 300
     local button_height = 50
     local button_spacing = 20
     suit.layout:reset(love.graphics.getWidth()/2 - button_width/2, love.graphics.getHeight()/2 - 100)
     
     if not state.name_submitted then
-        -- Ship name input
+        -- ship name input
         suit.Label("Enter your ship's name:", {align = "left"}, suit.layout:row(button_width, 40))
         suit.layout:row(button_width, button_spacing) -- spacing
         
-        -- Text input for ship name
+        -- text input for ship name
         if suit.Input(state.ship_name, suit.layout:row(button_width, button_height)).submitted and #state.ship_name.text > 0 then
             state.name_submitted = true
             state.show_error = false
         end
         suit.layout:row(button_width, button_spacing) -- spacing
         
-        -- Start button
+        -- start button
         if suit.Button("Startup", suit.layout:row(button_width, button_height)).hit then
             if #state.ship_name.text > 0 then
                 state.name_submitted = true
@@ -184,13 +184,13 @@ function menu.update(dt)
             end
         end
         
-        -- Show error if name is empty
+        -- show error if name is empty
         if state.show_error then
             suit.layout:row(button_width, button_spacing) -- spacing
             suit.Label("Please enter a name!", {align = "left", color = {normal = {fg = {1,0,0}}}}, suit.layout:row(button_width, 40))
         end
     else
-        -- Regular menu buttons after name is set
+        -- regular menu buttons after name is set
         if suit.Button("Play", suit.layout:row(button_width, button_height)).hit then
             return "game"
         end
@@ -213,24 +213,24 @@ function menu.update(dt)
 end
 
 function menu.draw()
-    -- Get current water color based on time of day
+    -- get current water color based on time of day
     local waterColor = getCurrentWaterColor()
     love.graphics.setColor(waterColor[1], waterColor[2], waterColor[3])
     love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
     
-    -- Draw ripples first as background effect
+    -- draw ripples first as background effect
     ripples:draw()
     
-    -- Draw title
+    -- draw title
     love.graphics.setColor(1, 1, 1, 1)
     local title = "Voyage"
     local font = love.graphics.getFont()
     local title_width = font:getWidth(title)
     love.graphics.print(title, 
         love.graphics.getWidth()/2 - title_width/2, 
-        50)  -- Fixed distance from top
+        50)  -- fixed distance from top
     
-    -- Draw UI
+    -- draw ui
     suit.draw()
 end
 

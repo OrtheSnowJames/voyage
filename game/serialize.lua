@@ -20,10 +20,10 @@ local serialize = {}
     when deserializing data from untrusted sources, as it could pose a security risk.
 ]]
 
---- Serializes a Lua table into a Lua source code string.
--- @param data table The table to serialize.
--- @param indent_level number (optional) The current indentation level for pretty printing.
--- @return string The Lua source code string representation of the table.
+--- serializes a lua table into a lua source code string.
+-- @param data table the table to serialize.
+-- @param indent_level number (optional) the current indentation level for pretty printing.
+-- @return string the lua source code string representation of the table.
 local function do_serialize(data, indent_level)
     indent_level = indent_level or 0
     local indent_str = string.rep("  ", indent_level)
@@ -38,35 +38,35 @@ local function do_serialize(data, indent_level)
             end
             first_element = false
 
-            s = s .. indent_str .. "  " -- Indent for key-value pair
+            s = s .. indent_str .. "  " -- indent for key-value pair
 
-            -- Serialize key
+            -- serialize key
             if type(k) == "string" then
-                s = s .. string.format("[%q]", k) -- Use %q for string keys to handle special chars
+                s = s .. string.format("[%q]", k) -- use %q for string keys to handle special chars
             elseif type(k) == "number" then
                 s = s .. "[" .. tostring(k) .. "]"
             else
-                -- For unsupported key types, you might want to error or skip
+                -- for unsupported key types, you might want to error or skip
                 error("Unsupported key type for serialization: " .. type(k))
             end
 
             s = s .. " = "
 
-            -- Serialize value recursively
+            -- serialize value recursively
             if type(v) == "table" then
                 s = s .. do_serialize(v, indent_level + 1)
             elseif type(v) == "string" then
-                s = s .. string.format("%q", v) -- Use %q for string values
+                s = s .. string.format("%q", v) -- use %q for string values
             elseif type(v) == "number" then
                 s = s .. tostring(v)
             elseif type(v) == "boolean" then
                 s = s .. tostring(v)
             elseif type(v) == "nil" then
-                s = s .. "nil" -- Explicitly write nil for clarity, though often omitted
+                s = s .. "nil" -- explicitly write nil for clarity, though often omitted
             else
-                -- Handle unsupported value types (e.g., functions, userdata)
-                -- For this basic serializer, we'll represent them as nil and print a warning.
-                s = s .. "nil -- [WARNING: Unserializable type '" .. type(v) .. "' replaced with nil]"
+                -- handle unsupported value types (e.g., functions, userdata)
+                -- for this basic serializer, we'll represent them as nil and print a warning.
+                s = s .. "nil -- [warning: unserializable type '" .. type(v) .. "' replaced with nil]"
             end
         end
         s = s .. "\n" .. indent_str .. "}"
@@ -79,19 +79,19 @@ local function do_serialize(data, indent_level)
     elseif type(data) == "nil" then
         s = "nil"
     else
-        -- For top-level unsupported types
-        s = "nil -- [WARNING: Unserializable type '" .. type(data) .. "' replaced with nil]"
+        -- for top-level unsupported types
+        s = "nil -- [warning: unserializable type '" .. type(data) .. "' replaced with nil]"
     end
 
     return s
 end
 
---- Deserializes a Lua source code string back into a Lua table.
--- @param str string The Lua source code string to deserialize.
--- @return table|nil The deserialized table, or nil if an error occurred.
--- @return string|nil An error message if deserialization failed.
+--- deserializes a lua source code string back into a lua table.
+-- @param str string the lua source code string to deserialize.
+-- @return table|nil the deserialized table, or nil if an error occurred.
+-- @return string|nil an error message if deserialization failed.
 local function do_deserialize(str)
-    -- Wrap the string in `return (...)` to ensure it's treated as an expression
+    -- wrap the string in `return (...)` to ensure it's treated as an expression
     -- and returns a value, rather than just executing statements.
     local chunk, err = load("return " .. str)
     if not chunk then

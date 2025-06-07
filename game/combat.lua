@@ -22,8 +22,8 @@ function combat.get_sword_level(sword_name)
         end
     end
     
-    -- check if it's a Legendary Sword+N format
-    local base, plus = string.match(sword_name, "Legendary Sword%+(%d+)")
+    -- check if it's a legendary sword+n format
+    local plus = string.match(sword_name, "Legendary Sword%+(%d+)")
     if plus then
         return #swords + tonumber(plus)
     end
@@ -35,7 +35,7 @@ function combat.get_sword_name(level)
     if level <= #swords then
         return swords[level]
     else
-        -- for levels beyond the highest sword, return "Legendary Sword+N"
+        -- for levels beyond the highest sword, return "legendary sword+n"
         local plus = level - #swords
         return string.format("Legendary Sword+%d", plus)
     end
@@ -45,12 +45,28 @@ function combat.get_sword_top_rarity()
     return #swords
 end
 
-function combat.combat(crew_size, enemy_size, sword_level, top_sword_level)
+function combat.combat(crew_size, enemy_size, sword_level, top_sword_level, player_y)
     print("\nCombat Debug:")
     print("Crew Size: " .. crew_size)
     print("Enemy Size: " .. enemy_size)
     print("Sword Level: " .. sword_level)
     print("Top Sword Level: " .. top_sword_level)
+    
+    -- apply depth penalty to sword level
+    local original_sword_level = sword_level
+    if player_y then
+        local depth_level = math.floor(math.abs(player_y) / 1000)
+        if depth_level > 0 then
+            -- calculate how much the sword is "debuffed" at this depth
+            -- the deeper you go, the more the sword is weakened
+            local effective_sword_level = sword_level - depth_level
+            sword_level = math.max(1, effective_sword_level) -- minimum level 1
+            
+            print("Depth Level: " .. depth_level)
+            print("Original Sword Level: " .. original_sword_level)
+            print("Effective Sword Level: " .. sword_level .. " (debuffed by depth)")
+        end
+    end
 
     -- if crew_size is less than enemy_size, you lose
     if crew_size <= enemy_size then
@@ -62,16 +78,16 @@ function combat.combat(crew_size, enemy_size, sword_level, top_sword_level)
         }
     end
     
-    -- Check for farming penalty (10x or more crew than enemy)
+    -- check for farming penalty (10x or more crew than enemy)
     if crew_size >= enemy_size * 10 then
-        -- Apply harsh penalty - lose 90% of crew
+        -- apply harsh penalty - lose 90% of crew
         local casualties = math.floor(crew_size * 0.9)
         print("Farming penalty applied - 90% casualties")
         return {
             victory = true,
             casualties = casualties,
             fainted = 0,
-            farming_penalty = true  -- Flag to indicate this was a farming penalty
+            farming_penalty = true  -- flag to indicate this was a farming penalty
         }
     end
     
@@ -103,12 +119,12 @@ function combat.combat(crew_size, enemy_size, sword_level, top_sword_level)
     end
     print("Best Roll: " .. best_roll)
     
-    -- Calculate fainted using equation: (their_men - 1) * random(0.7 to 1.0)
+    -- calculate fainted using equation: (their_men - 1) * random(0.7 to 1.0)
     local base_fainted = enemy_size - 1
     local random_multiplier = 0.7 + (math.random() * 0.3)  -- 0.7 to 1.0
     local fainted = math.floor(base_fainted * random_multiplier)
     
-    -- Calculate actual casualties - much lower chance with better crew advantage
+    -- calculate actual casualties - much lower chance with better crew advantage
     local actual_casualties = 0
     if crew_size < enemy_size * 1.5 then  -- only if crew advantage is small
         local casualty_chance = math.random(1, 10)
@@ -117,12 +133,12 @@ function combat.combat(crew_size, enemy_size, sword_level, top_sword_level)
         end
     end
     
-    -- Better swords reduce our casualties (deaths), not enemy fainted count
+    -- better swords reduce our casualties (deaths), not enemy fainted count
     local sword_reduction = math.floor(sword_effectiveness * 2)  -- up to 2 reduction with best sword
     actual_casualties = math.max(0, actual_casualties - sword_reduction)
     
-    -- Better swords can prevent casualties entirely
-    if actual_casualties > 0 and sword_level >= 3 then  -- Great Sword or better
+    -- better swords can prevent casualties entirely
+    if actual_casualties > 0 and sword_level >= 3 then  -- great sword or better
         if math.random(1, 10) <= sword_level then  -- higher level = better chance to prevent death
             actual_casualties = 0
         end
