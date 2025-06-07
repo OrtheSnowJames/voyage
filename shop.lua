@@ -28,6 +28,13 @@ local SHOP_ANIMATION_SPEED = 500  -- Speed of shop movement in pixels per second
 -- Port-a-shops state
 local port_a_shops = {}
 
+-- Load shopkeeper sprite
+local shopkeeper_sprite = love.graphics.newImage("assets/shopkeeper.png")
+local sprite_frame_width = 32
+local sprite_frame_height = 32
+local animation_frame_time = 0.5 -- 500ms per frame
+local total_frames = 2
+
 -- Animation state for each shop
 local function create_shop_animation(target_y)
     return {
@@ -35,7 +42,10 @@ local function create_shop_animation(target_y)
         target_y = target_y,
         progress = 0,  -- 0 to 1
         duration = 2,  -- Animation duration in seconds
-        is_animating = true
+        is_animating = true,
+        -- Frame animation
+        current_frame = 1,
+        frame_timer = 0
     }
 end
 
@@ -133,10 +143,11 @@ local function check_shop_interaction(player_x, player_y, shopkeeper)
     -- Check port-a-shops
     for _, shop_data in ipairs(port_a_shops) do
         if shop_data.is_spawned then
-            -- Calculate if player is within the 20x20 collision box
-            local in_x_range = math.abs(shop_data.x - player_x) <= 10
-            local in_y_range = math.abs(shop_data.y - player_y) <= 10
-            shop_data.is_active = in_x_range and in_y_range
+            -- Calculate if player is within range of the shopkeeper sprite
+            -- Using an extended interaction range for easier access
+            local distance = math.sqrt((shop_data.x - player_x)^2 + (shop_data.y - player_y)^2)
+            local interaction_range = 75 -- Increased from sprite size to a larger fixed value
+            shop_data.is_active = distance <= interaction_range
             any_shop_active = any_shop_active or shop_data.is_active
         end
     end
@@ -150,6 +161,20 @@ local function check_shop_interaction(player_x, player_y, shopkeeper)
 end
 
 function shop.update(game_state, player_ship, shopkeeper)
+    -- Update animation timers for all shops
+    local dt = love.timer.getDelta()
+    
+    for _, shop_data in ipairs(port_a_shops) do
+        if shop_data.is_spawned then
+            -- Update frame animation
+            shop_data.animation.frame_timer = shop_data.animation.frame_timer + dt
+            if shop_data.animation.frame_timer >= animation_frame_time then
+                shop_data.animation.frame_timer = shop_data.animation.frame_timer - animation_frame_time
+                shop_data.animation.current_frame = shop_data.animation.current_frame % total_frames + 1
+            end
+        end
+    end
+    
     -- Update shop visibility and animation based on player position with larger range
     local viewHeight = love.graphics.getHeight()
     
@@ -575,18 +600,47 @@ function shop.draw_shops(camera)
     -- Draw port-a-shops
     for _, shop_data in ipairs(port_a_shops) do
         if shop_data.is_spawned then
-            -- Draw the main circle
+            -- Create quad for the current frame
+            local quad = love.graphics.newQuad(
+                (shop_data.animation.current_frame - 1) * sprite_frame_width, 
+                0, 
+                sprite_frame_width, 
+                sprite_frame_height, 
+                shopkeeper_sprite:getWidth(), 
+                shopkeeper_sprite:getHeight()
+            )
+            
+            -- Set color based on interaction state
             if shop_data.is_active then
-                love.graphics.setColor(0.8, 0.8, 0.2, 1)  -- Yellow when active
+                -- Yellow tint when active (replace white with yellow)
+                love.graphics.setColor(1, 1, 0)
             else
-                love.graphics.setColor(0.6, 0.6, 0.6, 1)  -- Gray when inactive
+                -- Normal coloring
+                love.graphics.setColor(1, 1, 1)
             end
-            love.graphics.circle("fill", shop_data.x, shop_data.y, 15)
+            
+            -- Draw the sprite
+            love.graphics.draw(
+                shopkeeper_sprite, 
+                quad, 
+                shop_data.x, 
+                shop_data.y, 
+                0, -- rotation
+                1, -- scale x
+                1, -- scale y
+                sprite_frame_width/2, -- origin x (center)
+                sprite_frame_height/2 -- origin y (center)
+            )
+            
+            -- Reset color
+            love.graphics.setColor(1, 1, 1, 1)
+            
+            -- Draw "SHOP" text above shopkeeper when active
+            if shop_data.is_active then
+                love.graphics.print("SHOP", shop_data.x - 20, shop_data.y - sprite_frame_height)
+            end
         end
     end
-    
-    -- Reset color
-    love.graphics.setColor(1, 1, 1, 1)
     
     -- Restore graphics state
     love.graphics.pop()

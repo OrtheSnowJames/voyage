@@ -124,16 +124,32 @@ local port_a_shops = {}
 -- shopkeeper
 local shopkeeper = {
     x = 0,
-    y = shore_division,
+    y = shore_division - 16, -- Position on shore visually (half sprite height)
     size = 15,
     color = {1, 0.8, 0.2, 1}, -- golden color
     interaction_range = 50,    -- how close the ship needs to be to interact
     is_spawned = false,       -- whether the shopkeeper is currently spawned
     
+    -- Animation properties
+    sprite = love.graphics.newImage("assets/shopkeeper.png"),
+    frame_width = 32,
+    frame_height = 32,
+    frame_time = 0.5, -- 500ms per frame
+    current_frame = 1,
+    total_frames = 2,
+    timer = 0,
+    
     -- updates shopkeeper position
-    update = function(self, ship_x, ship_y)
-        -- keep shopkeeper at shore level
-        self.y = shore_division
+    update = function(self, ship_x, ship_y, dt)
+        -- keep shopkeeper at shore level (visually on the shore)
+        self.y = shore_division - 16
+        
+        -- Update animation
+        self.timer = self.timer + dt
+        if self.timer >= self.frame_time then
+            self.timer = self.timer - self.frame_time
+            self.current_frame = self.current_frame % self.total_frames + 1
+        end
         
         -- check if shore is in view
         local viewTop = camera.y
@@ -163,16 +179,49 @@ local shopkeeper = {
         local viewWidth = love.graphics.getWidth() / camera.scale
         
         if self.x >= viewLeft - 50 and self.x <= viewLeft + viewWidth + 50 then
-            -- draw body
-            love.graphics.setColor(self.color)
-            love.graphics.circle("fill", self.x, self.y, self.size)
+            -- Create quad for the current frame
+            local quad = love.graphics.newQuad(
+                (self.current_frame - 1) * self.frame_width, 
+                0, 
+                self.frame_width, 
+                self.frame_height, 
+                self.sprite:getWidth(), 
+                self.sprite:getHeight()
+            )
+            
+            -- Check if player is in range (for yellow color)
+            local distance = math.sqrt((self.x - player_ship.x)^2 + (self.y - player_ship.y)^2)
+            local in_range = distance <= self.interaction_range
+            
+            -- Set color based on interaction range
+            if in_range then
+                -- Yellow tint when in range (replace white with yellow)
+                love.graphics.setColor(1, 1, 0)
+            else
+                -- Normal coloring
+                love.graphics.setColor(1, 1, 1)
+            end
+            
+            -- Draw the sprite
+            love.graphics.draw(
+                self.sprite, 
+                quad, 
+                self.x, 
+                self.y, 
+                0, -- rotation
+                1, -- scale x
+                1, -- scale y
+                self.frame_width/2, -- origin x (center)
+                self.frame_height/2 -- origin y (center)
+            )
+            
+            -- Reset color
+            love.graphics.setColor(1, 1, 1, 1)
             
             -- draw shop indicator if ship is in range
-            local distance = math.sqrt((self.x - player_ship.x)^2 + (self.y - player_ship.y)^2)
-            if distance <= self.interaction_range then
+            if in_range then
                 -- draw "SHOP" text above shopkeeper
-                love.graphics.setColor(1, 1, 1, 1)
-                love.graphics.print("SHOP", self.x - 20, self.y - self.size * 2)
+                love.graphics.print("SHOP", self.x - 20, self.y - self.frame_height)
             end
         end
     end,
@@ -180,7 +229,8 @@ local shopkeeper = {
     -- check if ship can interact with shop
     can_interact = function(self)
         if not self.is_spawned then return false end
-        local distance = math.sqrt((self.x - player_ship.x)^2 + (self.y - player_ship.y)^2)
+
+        local distance = math.sqrt((self.x - player_ship.x)^2 + (interaction_y - player_ship.y)^2)
         return distance <= self.interaction_range
     end
 }
@@ -224,7 +274,7 @@ local function reset_game()
     -- reset shops
     shop.reset()
     shopkeeper.x = 0
-    shopkeeper.y = shore_division
+    shopkeeper.y = shore_division - 16
     shopkeeper.is_spawned = false
 end
 
@@ -825,7 +875,7 @@ function game.update(dt)
         update_catch_texts(dt)
         
         -- Update shopkeeper position
-        shopkeeper:update(player_ship.x, player_ship.y)
+        shopkeeper:update(player_ship.x, player_ship.y, dt)
         
         -- Update shop
         local new_state = shop.update(gameState, player_ship, shopkeeper)
