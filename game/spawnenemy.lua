@@ -11,6 +11,9 @@ local SHORE_DIVISION = 60  -- match the shore_division from game.lua
 local MIN_SHORE_DISTANCE = 40  -- minimum distance from shore (match player ship restriction)
 local SHOP_SAFE_DISTANCE = 50  -- minimum distance from shops for enemy spawns
 
+-- Load enemy boat sprite
+local enemy_boat_sprite = love.graphics.newImage("assets/boat.png")
+
 local enemies = {}  -- table to store active enemies
 local spawn_timer = 0
 
@@ -134,21 +137,25 @@ end
 
 function spawnenemy.draw()
     for _, enemy in ipairs(enemies) do
-        -- draw enemy ship (red triangle)
-        love.graphics.setColor(1, 0, 0, 1)
-        
         -- save current transform
         love.graphics.push()
         
         -- move to enemy position and rotate based on direction
         love.graphics.translate(enemy.x, enemy.y)
-        love.graphics.rotate(enemy.direction > 0 and 0 or math.pi)  -- rotate if moving left
+        love.graphics.rotate((enemy.direction > 0 and 0 or math.pi) + math.pi)  -- rotate based on direction + 180° for boat sprite
         
-        -- draw triangle
-        love.graphics.polygon("fill",
-            enemy.radius, 0,  -- front
-            -enemy.radius, -enemy.radius/2,  -- back left
-            -enemy.radius, enemy.radius/2    -- back right
+        -- Draw enemy boat sprite with red tint
+        love.graphics.setColor(1, 0, 0, 1)  -- Red color filter
+        local target_width = 64
+        local sprite_scale = target_width / enemy_boat_sprite:getWidth()
+        
+        love.graphics.draw(
+            enemy_boat_sprite,
+            0, 0, -- position (already translated)
+            0, -- rotation (already applied)
+            sprite_scale, sprite_scale, -- uniform scale to maintain aspect ratio
+            enemy_boat_sprite:getWidth()/2, -- origin X (center)
+            enemy_boat_sprite:getHeight()/2  -- origin Y (center)
         )
         
         -- restore transform before drawing text

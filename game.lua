@@ -93,7 +93,10 @@ local player_ship = {
         FADE_DURATION = 2,
         fade_timer = 0,
         fade_direction = "in"
-    }
+    },
+    
+    -- Ship sprite
+    sprite = love.graphics.newImage("assets/boat.png")
 }
 
 local shore_division = 60 -- what separates water from land (land is above this value)
@@ -1074,20 +1077,25 @@ function game.draw()
                     drawShipGlow(gameState.combat.enemy.x, gameState.combat.enemy.y, gameState.combat.enemy.radius, {1, 0.5, 0.5}, glowIntensity)
                 end
                 
-                love.graphics.setColor(1, 0, 0, 1)
-                
                 -- Save current transform
                 love.graphics.push()
                 
                 -- Move to enemy position and rotate based on direction
                 love.graphics.translate(gameState.combat.enemy.x, gameState.combat.enemy.y)
-                love.graphics.rotate(gameState.combat.enemy.direction > 0 and 0 or math.pi)  -- rotate if moving left
+                love.graphics.rotate((gameState.combat.enemy.direction > 0 and 0 or math.pi) + math.pi)  -- rotate based on direction + 180° for boat sprite
                 
-                -- Draw triangle
-                love.graphics.polygon("fill",
-                    gameState.combat.enemy.radius, 0,  -- front
-                    -gameState.combat.enemy.radius, -gameState.combat.enemy.radius/2,  -- back left
-                    -gameState.combat.enemy.radius, gameState.combat.enemy.radius/2    -- back right
+                -- Draw enemy boat sprite with red tint
+                love.graphics.setColor(1, 0, 0, 1)  -- Red color filter
+                local target_width = 64
+                local sprite_scale = target_width / player_ship.sprite:getWidth()
+                
+                love.graphics.draw(
+                    player_ship.sprite,  -- Use the same boat sprite
+                    0, 0, -- position (already translated)
+                    0, -- rotation (already applied)
+                    sprite_scale, sprite_scale, -- uniform scale to maintain aspect ratio
+                    player_ship.sprite:getWidth()/2, -- origin X (center)
+                    player_ship.sprite:getHeight()/2  -- origin Y (center)
                 )
                 
                 -- Restore transform before drawing text
@@ -1141,15 +1149,23 @@ function game.draw()
         -- Draw the ship with animation scale
         love.graphics.push()
         love.graphics.translate(player_ship.x, player_ship.y)
-        love.graphics.rotate(player_ship.rotation)
+        -- Rotate by 180 degrees (π radians) plus the ship's rotation since boat.png faces west
+        love.graphics.rotate(player_ship.rotation + math.pi)
         love.graphics.scale(ship_animation.scale, ship_animation.scale)
         
-        -- Draw ship triangle
+        -- Draw ship sprite
         love.graphics.setColor(player_ship.color)
-        love.graphics.polygon("fill", 
-            player_ship.radius, 0,
-            -player_ship.radius, -player_ship.radius/2,
-            -player_ship.radius, player_ship.radius/2
+        -- Calculate scale to make sprite width 64 pixels while maintaining aspect ratio
+        local target_width = 64
+        local sprite_scale = target_width / player_ship.sprite:getWidth()
+        
+        love.graphics.draw(
+            player_ship.sprite,
+            0, 0, -- position (already translated)
+            0, -- rotation (already applied)
+            sprite_scale, sprite_scale, -- uniform scale to maintain aspect ratio
+            player_ship.sprite:getWidth()/2, -- origin X (center)
+            player_ship.sprite:getHeight()/2  -- origin Y (center)
         )
         
         -- Draw ship name below the ship

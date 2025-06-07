@@ -166,6 +166,11 @@ function shop.update(game_state, player_ship, shopkeeper)
     
     for _, shop_data in ipairs(port_a_shops) do
         if shop_data.is_spawned then
+            -- Ensure animation structure exists (for backwards compatibility)
+            if not shop_data.animation or not shop_data.animation.current_frame then
+                shop_data.animation = create_shop_animation(shop_data.y)
+            end
+            
             -- Update frame animation
             shop_data.animation.frame_timer = shop_data.animation.frame_timer + dt
             if shop_data.animation.frame_timer >= animation_frame_time then
@@ -600,6 +605,11 @@ function shop.draw_shops(camera)
     -- Draw port-a-shops
     for _, shop_data in ipairs(port_a_shops) do
         if shop_data.is_spawned then
+            -- Ensure animation structure exists (for backwards compatibility)
+            if not shop_data.animation or not shop_data.animation.current_frame then
+                shop_data.animation = create_shop_animation(shop_data.y)
+            end
+            
             -- Create quad for the current frame
             local quad = love.graphics.newQuad(
                 (shop_data.animation.current_frame - 1) * sprite_frame_width, 
