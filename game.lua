@@ -127,7 +127,7 @@ local shopkeeper = {
     y = shore_division - 16, -- Position on shore visually (half sprite height)
     size = 15,
     color = {1, 0.8, 0.2, 1}, -- golden color
-    interaction_range = 50,    -- how close the ship needs to be to interact
+    interaction_range = 70,    -- increased from 50 to allow interaction from the water
     is_spawned = false,       -- whether the shopkeeper is currently spawned
     
     -- Animation properties
@@ -229,8 +229,7 @@ local shopkeeper = {
     -- check if ship can interact with shop
     can_interact = function(self)
         if not self.is_spawned then return false end
-
-        local distance = math.sqrt((self.x - player_ship.x)^2 + (interaction_y - player_ship.y)^2)
+        local distance = math.sqrt((self.x - player_ship.x)^2 + (self.y - player_ship.y)^2)
         return distance <= self.interaction_range
     end
 }
