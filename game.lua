@@ -797,7 +797,7 @@ end
 function game.get_saveable_data()
     local data = {}
     for k, v in pairs(player_ship) do
-        if type(v) ~= "function" then
+        if type(v) ~= "function" and k ~= "sprite" then
             data[k] = v
         end
     end
@@ -807,6 +807,15 @@ function game.get_saveable_data()
 end
 
 function game.load()
+    -- check if mobile
+    on_mobile = false
+    local os = love.system.getOS()
+    if os == 'iOS' or os == 'Android' then
+        on_mobile = true
+    end
+
+    mobile_controls.enabled = on_mobile
+
     local saved_data = serialize.load_data()
     if saved_data then
         -- only copy saved data properties, preserving methods

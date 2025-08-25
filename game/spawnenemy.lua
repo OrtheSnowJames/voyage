@@ -62,20 +62,14 @@ local function is_dangerous_area(y)
         return false
     end
     
-    -- check if there's a port-a-shop nearby
-    return not is_near_shop(y)
-end
-
--- check if player is beyond their last port-a-shop (always dangerous)
-local function is_beyond_last_shop(y)
     local shop = require("shop")
     local last_shop_y = shop.get_last_port_a_shop_y()
-    
-    -- if player is beyond their last port-a-shop, they're always in danger
-    if math.abs(y) > math.abs(last_shop_y) + 100 and math.abs(y) >= 1000 then  -- 100 unit buffer + safe zone check
+
+    -- If the player's y is greater than the last shop's y (plus a buffer), it's dangerous.
+    if math.abs(y) > last_shop_y + 100 then
         return true
     end
-    
+
     return false
 end
 
@@ -102,17 +96,12 @@ function spawnenemy.update(dt, camera, player_x, player_y)
     -- check if current area is dangerous
     local is_dangerous = is_dangerous_area(player_y)
     
-    -- check if player is beyond their last port-a-shop (always dangerous)
-    local is_beyond_last = is_beyond_last_shop(player_y)
-    
     -- determine spawn interval based on area safety
-    -- if beyond last shop OR in dangerous area, use excessive spawning
-    local current_spawn_interval = (is_dangerous or is_beyond_last) and EXCESSIVE_SPAWN_INTERVAL or ENEMY_SPAWN_INTERVAL
+    local current_spawn_interval = is_dangerous and EXCESSIVE_SPAWN_INTERVAL or ENEMY_SPAWN_INTERVAL
     
     -- debug output
-    if is_dangerous or is_beyond_last then
-        local reason = is_beyond_last and "beyond last shop" or "in dangerous area"
-        print("DEBUG: " .. reason .. " at Y=" .. player_y .. ", spawn interval=" .. current_spawn_interval .. "s, timer=" .. string.format("%.1f", spawn_timer) .. "s, enemies=" .. #enemies)
+    if is_dangerous then
+        print("DEBUG: in dangerous area at Y=" .. player_y .. ", spawn interval=" .. current_spawn_interval .. "s, timer=" .. string.format("%.1f", spawn_timer) .. "s, enemies=" .. #enemies)
     end
     
     -- update spawn timer
@@ -150,9 +139,8 @@ function spawnenemy.update(dt, camera, player_x, player_y)
             if max_y > min_y then
                 local spawn_y = nil
                 
-                                if is_dangerous or is_beyond_last then
-                    local area_type = is_beyond_last and "beyond last shop" or "dangerous area"
-                    print("DEBUG: " .. area_type .. " spawning - checking both lines and random positions")
+                                if is_dangerous then
+                    print("DEBUG: dangerous area spawning - checking both lines and random positions")
                     
                     -- First, try to spawn on 1000-unit divider lines
                     local start_y = math.floor(min_y / 1000) * 1000
@@ -207,7 +195,7 @@ function spawnenemy.update(dt, camera, player_x, player_y)
             if spawn_y then
                     print("DEBUG: Spawn position found at Y=" .. spawn_y .. ", proceeding with enemy creation")
                     -- calculate speed based on depth and area danger
-                    local enemy_speed = calculate_enemy_speed(spawn_y, is_dangerous or is_beyond_last)
+                    local enemy_speed = calculate_enemy_speed(spawn_y, is_dangerous)
                     
                     -- create new enemy
                     table.insert(enemies, {
@@ -221,8 +209,7 @@ function spawnenemy.update(dt, camera, player_x, player_y)
                     })
                     
                     -- print spawn info for debugging
-                    if is_dangerous or is_beyond_last then
-                        local area_type = is_beyond_last and "BEYOND LAST SHOP" or "DANGEROUS AREA"
+                    if is_dangerous then
                         -- Check if this was a divider line spawn
                         local is_divider_line = false
                         for _, line_y in ipairs(valid_lines or {}) do
@@ -233,9 +220,9 @@ function spawnenemy.update(dt, camera, player_x, player_y)
                         end
                         
                         if is_divider_line then
-                            print(area_type .. ": Enemy spawned on divider line Y=" .. spawn_y .. "! Speed: " .. string.format("%.1f", enemy_speed) .. " (multiplier: " .. MULTIPLIER_DANGEROUS_AREA .. "x)")
+                            print("DANGEROUS AREA: Enemy spawned on divider line Y=" .. spawn_y .. "! Speed: " .. string.format("%.1f", enemy_speed) .. " (multiplier: " .. MULTIPLIER_DANGEROUS_AREA .. "x)")
                         else
-                            print(area_type .. ": Enemy spawned at random Y=" .. spawn_y .. "! Speed: " .. string.format("%.1f", enemy_speed) .. " (multiplier: " .. MULTIPLIER_DANGEROUS_AREA .. "x)")
+                            print("DANGEROUS AREA: Enemy spawned at random Y=" .. spawn_y .. "! Speed: " .. string.format("%.1f", enemy_speed) .. " (multiplier: " .. MULTIPLIER_DANGEROUS_AREA .. "x)")
                         end
                     else
                         print("SAFE AREA: Enemy spawned at Y=" .. spawn_y .. "! Speed: " .. string.format("%.1f", enemy_speed))
@@ -336,10 +323,9 @@ end
 
 function spawnenemy.get_spawn_status(player_y)
     local is_dangerous = is_dangerous_area(player_y)
-    local is_beyond_last = is_beyond_last_shop(player_y)
-    local current_interval = (is_dangerous or is_beyond_last) and EXCESSIVE_SPAWN_INTERVAL or ENEMY_SPAWN_INTERVAL
+    local current_interval = is_dangerous and EXCESSIVE_SPAWN_INTERVAL or ENEMY_SPAWN_INTERVAL
     return {
-        is_dangerous = is_dangerous or is_beyond_last,
+        is_dangerous = is_dangerous,
         spawn_interval = current_interval,
         enemy_count = #enemies,
         max_enemies = MAX_ENEMIES_ON_SCREEN

@@ -125,7 +125,8 @@ function fishing_minigame.update(dt)
     local upward_force = ROD_SPEED * total_multiplier / depth_difficulty
     
     -- apply gravity
-    fishing_state.rod_velocity = fishing_state.rod_velocity + GRAVITY * dt
+    local rod_bonus = 1 + (fishing_state.rod_level - 1) * 0.1 -- 10% gravity reduction per rod level
+    fishing_state.rod_velocity = fishing_state.rod_velocity + (GRAVITY / rod_bonus) * dt
     
     -- apply upward force from mouse movement
     fishing_state.rod_velocity = fishing_state.rod_velocity - upward_force * dt
