@@ -850,6 +850,7 @@ local catch_texts = {}
 local fishing_pressed = false
 local fishing_cooldown = 0
 local last_cooldown = game_config.fishing_cooldown  -- track previous cooldown to detect when it reaches 0
+local player_just_failed_fishing = false -- flag to check if player failed the minigame
 
 function add_catch_text(text)
     -- add new text at the beginning
@@ -932,21 +933,27 @@ function fish(dt)
     
     -- detect when cooldown just reached 0
     if prev_cooldown > 0 and fishing_cooldown <= 0 then
-        -- crew fishing
-        local fish_available = fishing.get_fish_avalible(player_ship.x, player_ship.y, player_ship.time_system.time)
-        trigger_ship_animation()  -- trigger animation for crew fishing
-        for i = 1, player_ship.men do
-            local fish_caught = fishing.fish(fishing.get_rod_rarity(player_ship.rod), fishing.get_rod_top_rarity(), fish_available, player_ship.y)
-            
-            -- check for special fish
-            if fishing.is_special_fish(fish_caught) then
-                trigger_special_fish_event(fish_caught)
-            else
-                -- regular fish
-                add_catch_text("Crew " .. i .. ": " .. fish_caught)
-                table.insert(player_ship.caught_fish, fish_caught)  -- store in player_ship
-                print("Crew member " .. i .. " caught: " .. fish_caught)
+        if not player_just_failed_fishing then
+            -- crew fishing
+            local fish_available = fishing.get_fish_avalible(player_ship.x, player_ship.y, player_ship.time_system.time)
+            trigger_ship_animation()  -- trigger animation for crew fishing
+            for i = 1, player_ship.men do
+                local fish_caught = fishing.fish(fishing.get_rod_rarity(player_ship.rod), fishing.get_rod_top_rarity(), fish_available, player_ship.y)
+                
+                -- check for special fish
+                if fishing.is_special_fish(fish_caught) then
+                    trigger_special_fish_event(fish_caught)
+                else
+                    -- regular fish
+                    add_catch_text("Crew " .. i .. ": " .. fish_caught)
+                    table.insert(player_ship.caught_fish, fish_caught)  -- store in player_ship
+                    print("Crew member " .. i .. " caught: " .. fish_caught)
+                end
             end
+        else
+            -- if player failed, reset the flag so crew can fish next time
+            player_just_failed_fishing = false
+            print("Crew did not fish because player failed.")
         end
     end
 
@@ -1381,6 +1388,7 @@ function game.update(dt)
                     -- fish escaped
                     add_catch_text("Fish escaped!")
                     print("Fish escaped!")
+                    player_just_failed_fishing = true -- set the flag
                 end
                 
                 -- reset cooldown

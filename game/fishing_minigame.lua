@@ -493,6 +493,14 @@ function fishing_minigame.draw()
     local time_text_width = love.graphics.getFont():getWidth(time_text)
     love.graphics.print(time_text, (screen_width - time_text_width) / 2, bar_y - 30)
     
+    -- draw available fish
+    love.graphics.setColor(1, 1, 1, 0.8)
+    local fish_list_x = bar_x + BAR_WIDTH + 40
+    love.graphics.print("Potential Catches:", fish_list_x, bar_y)
+    for i, fish_name in ipairs(fishing_state.available_fish) do
+        love.graphics.print("- " .. fish_name, fish_list_x, bar_y + 20 * i)
+    end
+    
     -- draw catch progress text
     local progress_text = string.format("Catch: %.0f%%", fishing_state.catch_progress * 100)
     local progress_text_width = love.graphics.getFont():getWidth(progress_text)

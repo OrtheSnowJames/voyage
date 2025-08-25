@@ -124,14 +124,13 @@ function combat.combat(crew_size, enemy_size, sword_level, top_sword_level, play
     local random_multiplier = 0.7 + (math.random() * 0.3)  -- 0.7 to 1.0
     local fainted = math.floor(base_fainted * random_multiplier)
     
-    -- calculate actual casualties - much lower chance with better crew advantage
-    local actual_casualties = 0
-    if crew_size < enemy_size * 1.5 then  -- only if crew advantage is small
-        local casualty_chance = math.random(1, 10)
-        if casualty_chance <= 2 then  -- 20% chance
-            actual_casualties = 1
-        end
-    end
+    -- calculate actual casualties based on best_roll and crew advantage
+    local base_casualties = math.ceil(enemy_size * best_roll)
+    
+    -- A larger crew directly reduces the number of casualties
+    local crew_advantage = (crew_size / enemy_size) - 1 -- e.g., 18/6 = 3, advantage = 2
+    local crew_reduction = math.floor(base_casualties * (1 - (1 / (1 + crew_advantage))))
+    local actual_casualties = math.max(0, base_casualties - crew_reduction)
     
     -- better swords reduce our casualties (deaths), not enemy fainted count
     local sword_reduction = math.floor(sword_effectiveness * 2)  -- up to 2 reduction with best sword
