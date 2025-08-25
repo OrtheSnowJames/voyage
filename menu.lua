@@ -1,6 +1,7 @@
 local menu = {}
 local suit = require "SUIT"
 local serialize = require("game.serialize")
+local size = require("game.size")
 
 local state = {
     ship_name = {text = ""},  -- initialize with text property for suit input
@@ -12,10 +13,10 @@ local state = {
 
 -- water colors for different times of day
 local waterColors = {
-    dawn = {0.3, 0.2, 0.4},    -- purple-orange mix for sunrise (0:00)
-    day = {0.05, 0.1, 0.3},    -- bright blue (6:00)
-    dusk = {0.2, 0.1, 0.3},    -- purple-blue for evening (11:00)
-    night = {0.01, 0.02, 0.08} -- very dark blue for night (12:00)
+    dawn  = {0.15, 0.2, 0.35},   -- bluish with slight warm tint (sunrise ~0:00)
+    day   = {0.05, 0.1, 0.3},    -- bright clear blue (6:00)
+    dusk  = {0.12, 0.08, 0.25},  -- deeper blue with purple hint (11:00)
+    night = {0.01, 0.02, 0.08}   -- very dark blue (12:00)
 }
 
 -- linear interpolation helper function
@@ -88,8 +89,8 @@ function ripples:spawn()
     local speed = love.math.random(20, 40)
     
     table.insert(self.particles, {
-        x = math.random() * love.graphics.getWidth(),
-        y = love.graphics.getHeight() + 50,
+        x = math.random() * size.CANVAS_WIDTH,
+        y = size.CANVAS_HEIGHT + 50,
         vy = -speed,  -- move upward
         size = love.math.random(3, 6),
         alpha = 1,
@@ -160,7 +161,7 @@ function menu.update(dt)
     local button_width = 300
     local button_height = 50
     local button_spacing = 20
-    suit.layout:reset(love.graphics.getWidth()/2 - button_width/2, love.graphics.getHeight()/2 - 100)
+    suit.layout:reset(size.CANVAS_WIDTH/2 - button_width/2, size.CANVAS_HEIGHT/2 - 100)
     
     if not state.name_submitted then
         -- ship name input
@@ -171,6 +172,8 @@ function menu.update(dt)
         if suit.Input(state.ship_name, suit.layout:row(button_width, button_height)).submitted and #state.ship_name.text > 0 then
             state.name_submitted = true
             state.show_error = false
+            -- save the ship name immediately
+            serialize.save_data({name = state.ship_name.text})
         end
         suit.layout:row(button_width, button_spacing) -- spacing
         
@@ -179,6 +182,8 @@ function menu.update(dt)
             if #state.ship_name.text > 0 then
                 state.name_submitted = true
                 state.show_error = false
+                -- save the ship name immediately
+                serialize.save_data({name = state.ship_name.text})
             else
                 state.show_error = true
             end
@@ -196,7 +201,7 @@ function menu.update(dt)
         end
         suit.layout:row(button_width, button_spacing) -- spacing
         
-        if suit.Button("Reset Save", suit.layout:row(button_width, button_height)).hit then
+        if suit.Button("Wipe Save", suit.layout:row(button_width, button_height)).hit then
             love.filesystem.remove("save.lua")
             state.name_submitted = false
             state.ship_name.text = ""
@@ -216,7 +221,7 @@ function menu.draw()
     -- get current water color based on time of day
     local waterColor = getCurrentWaterColor()
     love.graphics.setColor(waterColor[1], waterColor[2], waterColor[3])
-    love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+    love.graphics.rectangle("fill", 0, 0, size.CANVAS_WIDTH, size.CANVAS_HEIGHT)
     
     -- draw ripples first as background effect
     ripples:draw()
@@ -227,7 +232,7 @@ function menu.draw()
     local font = love.graphics.getFont()
     local title_width = font:getWidth(title)
     love.graphics.print(title, 
-        love.graphics.getWidth()/2 - title_width/2, 
+        size.CANVAS_WIDTH/2 - title_width/2, 
         50)  -- fixed distance from top
     
     -- draw ui

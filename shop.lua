@@ -2,6 +2,7 @@ local shop = {}
 local suit = require "SUIT"
 local fishing = require("game.fishing")
 local combat = require("game.combat")  -- add combat module
+local size = require("game.size")
 
 -- player's inventory (should be moved to a proper inventory system later)
 local coins = 0
@@ -245,7 +246,7 @@ function shop.update(game_state, player_ship, shopkeeper, game_config)
     end
     
     -- get window dimensions
-    local window_width = love.graphics.getWidth()
+    local window_width = size.CANVAS_WIDTH
     local window_height = love.graphics.getHeight()
     
     if inventory_state.mode == "transfer" then
@@ -531,7 +532,7 @@ function shop.update(game_state, player_ship, shopkeeper, game_config)
     
     -- speed upgrade section (bottom right)
     suit.layout:reset(grid_start_x + (section_width + padding) * 2, row2_y)
-    suit.Label("Ship Speed", {align = "center"}, suit.layout:row(section_width, 30))
+    suit.Label("Ship Parts", {align = "center"}, suit.layout:row(section_width, 30))
     local speed_cost = get_speed_upgrade_cost(player_ship.max_speed)
     if coins >= speed_cost then
         if suit.Button("Upgrade Speed (" .. speed_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
@@ -613,7 +614,7 @@ function shop.draw_shops(camera)
     
     -- draw horizontal divider lines every 1000 units
     -- get viewport boundaries
-    local viewWidth = love.graphics.getWidth() / camera.scale
+    local viewWidth = size.CANVAS_WIDTH / camera.scale
     local viewHeight = love.graphics.getHeight() / camera.scale
     local shoreExtension = 1000 -- match the shore extension from game.lua
     
@@ -691,7 +692,7 @@ function shop.draw_ui()
         -- draw full-screen semi-transparent background (darker for inventory)
         local alpha = inventory_state.mode ~= "" and 0.9 or 0.85
         love.graphics.setColor(0, 0, 0, alpha)
-        love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+        love.graphics.rectangle("fill", 0, 0, size.CANVAS_WIDTH, size.CANVAS_HEIGHT)
         love.graphics.setColor(1, 1, 1, 1)
         
         -- draw ui
@@ -732,6 +733,23 @@ function shop.set_port_a_shops_data(data)
     if data.coins then
         coins = data.coins
     end
+end
+
+-- get the y position of the last port-a-shop (furthest from shore)
+function shop.get_last_port_a_shop_y()
+    if #port_a_shops == 0 then
+        return 0  -- no shops owned, so shore is the safe point
+    end
+    
+    -- find the shop with the highest y value (furthest from shore)
+    local last_shop_y = 0
+    for _, shop_data in ipairs(port_a_shops) do
+        if shop_data.animation and shop_data.animation.target_y then
+            last_shop_y = math.max(last_shop_y, shop_data.animation.target_y)
+        end
+    end
+    
+    return last_shop_y
 end
 
 return shop

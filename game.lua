@@ -3,11 +3,13 @@
 local game = {}
 local suit = require "SUIT"
 local fishing = require("game.fishing")
+local fishing_minigame = require("game.fishing_minigame")
 local serialize = require("game.serialize")
 local combat = require("game.combat")
 local shop = require("shop")
 local spawnenemy = require("game.spawnenemy")
 local menu = require("menu")  -- add menu requirement to get ship name
+local size = require("game.size")
 
 -- game configuration (modifiable during runtime)
 local game_config = {
@@ -36,6 +38,20 @@ end
 -- debug options
 local debugOptions = {
     showDebugButtons = false  -- toggle with f3
+}
+
+-- mobile controls
+local mobile_controls = {
+    enabled = true,
+    button_size = 60,
+    button_spacing = 20,
+    button_alpha = 0.8,
+    buttons = {
+        forward = {x = 0, y = 0, pressed = false, key = "w"},
+        left = {x = 0, y = 0, pressed = false, key = "a"},
+        right = {x = 0, y = 0, pressed = false, key = "d"},
+        fish = {x = 0, y = 0, pressed = false, key = "f"}
+    }
 }
 
 local gameState = {
@@ -114,6 +130,180 @@ local shore_division = 60 -- what separates water from land (land is above this 
 local shore_texture = love.graphics.newImage("assets/shore.png")
 local shore_width = shore_texture:getWidth()
 local shore_height = shore_texture:getHeight()
+local shore_quad = love.graphics.newQuad(0, 10, shore_width, shore_height - 20, shore_width, shore_height)
+local shore_quad_height = shore_height - 40
+local bottom_half_quad = love.graphics.newQuad(0, shore_height / 2 + 20, shore_width, shore_height / 2 - 20, shore_width, shore_height)
+local bottom_half_quad_height = shore_height / 2 - 20
+
+-- create shader to replace green pixels with water color
+local shore_shader = love.graphics.newShader([[
+    extern vec3 greenPixel;
+    
+    vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords)
+    {
+        vec4 texcolor = Texel(tex, texture_coords);
+        
+        // Check if this pixel is close to green (0, 255, 0)
+        if (abs(texcolor.r - greenPixel.r) < 0.1 && 
+            abs(texcolor.g - greenPixel.g) < 0.1 && 
+            abs(texcolor.b - greenPixel.b) < 0.1) {
+            // Discard the pixel to make it transparent
+            discard;
+        }
+        
+        // Keep other pixels unchanged
+        return texcolor * color;
+    }
+]])
+
+local water_shader = love.graphics.newShader([[
+    extern number time;
+    extern vec3 waterColor;
+    extern number shoreY;
+    extern vec2 camera; // x, y
+    extern vec2 resolution; // width, height
+
+    // Ripple data from the boat
+    extern int ripple_count;
+    extern float ripple_sources_x[10];
+    extern float ripple_sources_y[10];
+    extern float ripple_spawn_times[10];
+    extern float ripple_intensities[10];
+
+    // 2D Random function
+    float random(vec2 st) {
+        return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+    }
+
+    // 2D Noise function
+    float noise(vec2 st) {
+        vec2 i = floor(st);
+        vec2 f = fract(st);
+        float a = random(i);
+        float b = random(i + vec2(1.0, 0.0));
+        float c = random(i + vec2(0.0, 1.0));
+        float d = random(i + vec2(1.0, 1.0));
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.y * u.x;
+    }
+
+    vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords) {
+        vec2 uv = screen_coords / resolution;
+        
+        // Approximate world coordinates for foam calculation
+        float world_y = camera.y + screen_coords.y;
+        float world_x = camera.x + screen_coords.x;
+        vec2 world_pos = vec2(world_x, world_y);
+
+        // Base water color
+        vec3 final_color = waterColor;
+
+        // Wave simulation using multiple layers of noise
+        float wave1 = noise(uv * vec2(8.0, 4.0) + vec2(time * 0.1, time * 0.05));
+        float wave2 = noise(uv * vec2(20.0, 10.0) + vec2(time * -0.05, time * 0.15));
+        float wave_total = wave1 * 0.7 + wave2 * 0.3;
+        
+        // --- Boat Ripples ---
+        float total_ripple_displacement = 0.0;
+        for (int i = 0; i < ripple_count; i++) {
+            vec2 ripple_source = vec2(ripple_sources_x[i], ripple_sources_y[i]);
+            float dist = length(world_pos - ripple_source);
+            float time_alive = time - ripple_spawn_times[i];
+
+            if (time_alive > 0.0 && time_alive < 4.0) { // Ripples last 4 seconds
+                float circle_radius = time_alive * 60.0; // speed of expansion
+                float circle_width = 30.0;
+                
+                if (dist > circle_radius - circle_width && dist < circle_radius + circle_width) {
+                    float ripple_shape = (dist - circle_radius) / circle_width; // -1 to 1
+                    float displacement = sin(ripple_shape * 3.14159);
+                    float falloff = (1.0 - smoothstep(0.0, 4.0, time_alive)) * ripple_intensities[i];
+                    total_ripple_displacement += displacement * falloff;
+                }
+            }
+        }
+        
+        float wave_total_with_ripples = wave_total + total_ripple_displacement * 0.35;
+
+        // Add color variation based on waves
+        final_color += wave_total_with_ripples * 0.05;
+        
+        // Specular highlights on wave crests
+        float specular = pow(noise(uv * vec2(10.0, 5.0) - vec2(time * 0.12, time * 0.08)), 18.0);
+        specular *= smoothstep(0.4, 0.7, wave_total_with_ripples); // Highlights on crests
+        final_color += vec3(1.0) * specular * 0.6;
+
+        // Foam near the shore
+        float dist_to_shore = world_y - (shoreY + 40); // Add offset to bring foam down
+        if (dist_to_shore < 50.0 && dist_to_shore > 0.0) {
+            float foam_factor = 1.0 - (dist_to_shore / 50.0);
+            float foam_noise = noise(vec2(world_x / 30.0 + time * 0.2, time * 0.1));
+            
+            if (foam_noise > 0.65) {
+                float foam_intensity = smoothstep(0.65, 0.8, foam_noise) * foam_factor;
+                final_color = mix(final_color, vec3(0.9, 0.9, 1.0), foam_intensity);
+            }
+        }
+        
+        // Clamp final color to avoid overly bright spots
+        final_color = clamp(final_color, 0.0, 1.0);
+
+        return vec4(final_color, 1.0);
+    }
+]])
+
+-- shore objects system
+local shore_objects = {}
+local SHORE_OBJECT_COUNT = 20
+local SHORE_OBJECT_SPACING = shore_width  -- space between objects
+
+-- Ship ripple system
+local ship_ripples = {}
+local MAX_RIPPLES = 50 -- more ripples for a longer wake
+local RIPPLE_SPAWN_DIST = 20 -- spawn a new ripple source every 20 pixels traveled
+local last_player_ripple_pos = {x=0, y=0}
+
+-- initialize shore objects
+local function init_shore_objects()
+    shore_objects = {}
+    for i = 1, SHORE_OBJECT_COUNT do
+        table.insert(shore_objects, {
+            x = (i - 11) * SHORE_OBJECT_SPACING, -- Start centered on the player
+            y = shore_division
+        })
+    end
+end
+
+-- update shore objects (teleport when needed, don't move them)
+local function update_shore_objects()
+    local viewWidth = size.CANVAS_WIDTH / camera.scale
+    local view_left = camera.x
+    local view_right = camera.x + viewWidth
+
+    -- Find the object with the minimum x and the object with the maximum x
+    local min_obj = shore_objects[1]
+    local max_obj = shore_objects[1]
+    for i = 2, #shore_objects do
+        if shore_objects[i].x < min_obj.x then
+            min_obj = shore_objects[i]
+        end
+        if shore_objects[i].x > max_obj.x then
+            max_obj = shore_objects[i]
+        end
+    end
+
+    -- If the camera view gets too close to the leftmost shore object,
+    -- move the rightmost object to the left end to pre-fill the space.
+    if view_left < min_obj.x + shore_width then
+        max_obj.x = min_obj.x - SHORE_OBJECT_SPACING
+    end
+
+    -- If the camera view gets too close to the rightmost shore object,
+    -- move the leftmost object to the right end to pre-fill the space.
+    if view_right > max_obj.x then
+        min_obj.x = max_obj.x + SHORE_OBJECT_SPACING
+    end
+end
 
 -- ripple system
 local ripples = {
@@ -188,7 +378,7 @@ local shopkeeper = {
         if not self.is_spawned then return end
         
         local viewLeft = camera.x
-        local viewWidth = love.graphics.getWidth() / camera.scale
+        local viewWidth = size.CANVAS_WIDTH / camera.scale
         
         if self.x >= viewLeft - 50 and self.x <= viewLeft + viewWidth + 50 then
             -- create quad for the current frame
@@ -293,6 +483,18 @@ local function reset_game()
     special_fish_event.timer = 0
     special_fish_event.fish_name = ""
     special_fish_event.caught_gold_sturgeon = false
+    
+    -- reset mobile controls
+    for _, button in pairs(mobile_controls.buttons) do
+        button.pressed = false
+    end
+    
+    -- reset shore objects
+    init_shore_objects()
+    
+    -- reset ship_ripples
+    ship_ripples = {}
+    last_player_ripple_pos = {x=player_ship.x, y=player_ship.y}
 end
 
 function ripples:spawn(player_ship, x, y)
@@ -301,8 +503,8 @@ function ripples:spawn(player_ship, x, y)
     -- get viewport boundaries (in world coordinates)
     local viewLeft = camera.x
     local viewTop = camera.y
-    local viewWidth = love.graphics.getWidth() / camera.scale
-    local viewHeight = love.graphics.getHeight() / camera.scale
+    local viewWidth = size.CANVAS_WIDTH / camera.scale
+    local viewHeight = size.CANVAS_HEIGHT / camera.scale
     
     -- default spawn position and movement
     local ripple_x = x or (viewLeft + math.random() * viewWidth)
@@ -378,8 +580,8 @@ function ripples:update(dt, player_ship)
     -- get viewport boundaries
     local viewLeft = camera.x
     local viewTop = camera.y
-    local viewWidth = love.graphics.getWidth() / camera.scale
-    local viewHeight = love.graphics.getHeight() / camera.scale
+    local viewWidth = size.CANVAS_WIDTH / camera.scale
+    local viewHeight = size.CANVAS_HEIGHT / camera.scale
     
     -- count visible ripples (ripples currently on screen)
     local visible_ripples = 0
@@ -432,8 +634,8 @@ function ripples:draw()
     -- get viewport boundaries
     local viewLeft = camera.x
     local viewTop = camera.y
-    local viewWidth = love.graphics.getWidth() / camera.scale
-    local viewHeight = love.graphics.getHeight() / camera.scale
+    local viewWidth = size.CANVAS_WIDTH / camera.scale
+    local viewHeight = size.CANVAS_HEIGHT / camera.scale
     
     love.graphics.setLineWidth(1)
     for _, p in ipairs(self.particles) do
@@ -462,11 +664,11 @@ end
 function player_ship:update(dt)
     -- handle rotation
     local turning = false
-    if love.keyboard.isDown("a") then
+    if love.keyboard.isDown("a") or mobile_controls.buttons.left.pressed then
         self.target_rotation = self.target_rotation - self.turn_speed * dt
         turning = true
     end
-    if love.keyboard.isDown("d") then
+    if love.keyboard.isDown("d") or mobile_controls.buttons.right.pressed then
         self.target_rotation = self.target_rotation + self.turn_speed * dt
         turning = true
     end
@@ -481,7 +683,7 @@ function player_ship:update(dt)
     
     -- handle acceleration
     local accelerating = false
-    if love.keyboard.isDown("w") then
+    if love.keyboard.isDown("w") or mobile_controls.buttons.forward.pressed then
         -- accelerate forward
         self.velocity_x = self.velocity_x + forward_x * self.acceleration * dt
         self.velocity_y = self.velocity_y + forward_y * self.acceleration * dt
@@ -531,6 +733,27 @@ function player_ship:update(dt)
     -- apply new position
     self.x = new_x
     self.y = new_y
+
+    -- update boat ripple system
+    local dist_since_last_ripple = math.sqrt((player_ship.x - last_player_ripple_pos.x)^2 + (player_ship.y - last_player_ripple_pos.y)^2)
+    local speed = math.sqrt(player_ship.velocity_x^2 + player_ship.velocity_y^2)
+
+    if speed > 20 and dist_since_last_ripple > RIPPLE_SPAWN_DIST then
+        table.insert(ship_ripples, 1, {
+            x = player_ship.x, 
+            y = player_ship.y, 
+            spawn_time = player_ship.time_system.time, 
+            intensity = math.min(1.0, speed / player_ship.max_speed) 
+        })
+        last_player_ripple_pos.x = player_ship.x
+        last_player_ripple_pos.y = player_ship.y
+        if #ship_ripples > MAX_RIPPLES then
+            table.remove(ship_ripples) -- remove oldest
+        end
+    end
+
+    -- update ship animation
+    update_ship_animation(dt)
 end
 
 -- moves camera to a specific world coordinate
@@ -546,8 +769,8 @@ function camera:zoom(factor, target_x, target_y)
 
     -- if target coordinates provided, adjust position to keep that point centered
     if target_x and target_y then
-        local screen_width = love.graphics.getWidth()
-        local screen_height = love.graphics.getHeight()
+        local screen_width = size.CANVAS_WIDTH
+        local screen_height = size.CANVAS_HEIGHT
         
         -- calculate screen center
         local center_x = screen_width / 2
@@ -561,7 +784,7 @@ function camera:zoom(factor, target_x, target_y)
         self.y = self.y + dy
     else
         -- if no target, keep screen center stable (old behavior)
-    local mx, my = love.graphics.getWidth() / 2, love.graphics.getHeight() / 2
+    local mx, my = size.CANVAS_WIDTH / 2, size.CANVAS_HEIGHT / 2
     local dx = mx / oldScale - mx / self.scale
     local dy = my / oldScale - my / self.scale
 
@@ -600,6 +823,9 @@ function game.load()
         player_ship.name = menu.get_name()
         serialize.save_data(game.get_saveable_data())
     end
+    
+    -- initialize shore objects
+    init_shore_objects()
 end
 
 -- ship animation
@@ -685,9 +911,9 @@ function trigger_special_fish_event(fish_name)
 end
 
 function fish(dt)
-    -- track if f was just pressed (not held)
-    local fishing_released = love.keyboard.isDown("f") and not fishing_pressed
-    fishing_pressed = love.keyboard.isDown("f")
+    -- track if f was just pressed (not held) - check both keyboard and mobile button
+    local fishing_released = (love.keyboard.isDown("f") or mobile_controls.buttons.fish.pressed) and not fishing_pressed
+    fishing_pressed = love.keyboard.isDown("f") or mobile_controls.buttons.fish.pressed
 
     -- store previous cooldown for transition detection
     local prev_cooldown = fishing_cooldown
@@ -716,24 +942,14 @@ function fish(dt)
     end
 
     -- player-initiated fishing
-    if fishing_released and fishing_cooldown <= 0 then
+    if fishing_released and fishing_cooldown <= 0 and not fishing_minigame.is_active() then
+        -- start fishing mini-game
         local fish_available = fishing.get_fish_avalible(player_ship.x, player_ship.y, player_ship.time_system.time)
-        local fish_caught = fishing.fish(fishing.get_rod_rarity(player_ship.rod), fishing.get_rod_top_rarity(), fish_available, player_ship.y)
+        local depth_level = math.floor(math.abs(player_ship.y) / 1000)
+        if depth_level < 1 then depth_level = 1 end
         
-        -- check for special fish
-        if fishing.is_special_fish(fish_caught) then
-            trigger_special_fish_event(fish_caught)
-        else
-            -- regular fish
-            add_catch_text("You: " .. fish_caught)
-            table.insert(player_ship.caught_fish, fish_caught)  -- store in player_ship
-            print("You caught: " .. fish_caught)
-        end
-        
-        trigger_ship_animation()  -- trigger animation for player fishing
-        
-        -- reset cooldown using current config value
-        fishing_cooldown = game_config.fishing_cooldown
+        local current_water_color = game.getCurrentWaterColor()
+        fishing_minigame.start_fishing(fish_available, fishing.get_rod_rarity(player_ship.rod), depth_level, current_water_color)
     end
 end
 
@@ -742,12 +958,55 @@ local function lerp(a, b, t)
     return a + (b - a) * t
 end
 
+-- calculate fish quality based on fishing performance
+local function calculate_fish_quality(fishing_result)
+    if not fishing_result.success then
+        return nil
+    end
+    
+    local quality_score = 0
+    
+    -- perfect catch bonus (no touches)
+    if fishing_result.perfect_catch then
+        quality_score = quality_score + 50
+        print("Perfect catch bonus: +50")
+    end
+    
+    -- time bonus (faster = better)
+    local time_bonus = math.max(0, 30 - fishing_result.total_time)
+    quality_score = quality_score + time_bonus
+    print("Time bonus: +" .. time_bonus)
+    
+    -- touches penalty
+    local touch_penalty = fishing_result.touches * 10
+    quality_score = quality_score - touch_penalty
+    if touch_penalty > 0 then
+        print("Touch penalty: -" .. touch_penalty)
+    end
+    
+    -- final quality score
+    print("Total quality score: " .. quality_score)
+    
+    -- return quality level
+    if quality_score >= 80 then
+        return "Legendary"
+    elseif quality_score >= 60 then
+        return "Excellent"
+    elseif quality_score >= 40 then
+        return "Good"
+    elseif quality_score >= 20 then
+        return "Fair"
+    else
+        return "Poor"
+    end
+end
+
 -- water colors for different times of day
 local waterColors = {
-    dawn = {0.3, 0.2, 0.4},    -- purple-orange mix for sunrise (0:00)
-    day = {0.05, 0.1, 0.3},    -- bright blue (6:00)
-    dusk = {0.2, 0.1, 0.3},    -- purple-blue for evening (11:00)
-    night = {0.01, 0.02, 0.08} -- very dark blue for night (12:00)
+    dawn  = {0.15, 0.2, 0.35},   -- bluish with slight warm tint (sunrise ~0:00)
+    day   = {0.05, 0.1, 0.3},    -- bright clear blue (6:00)
+    dusk  = {0.12, 0.08, 0.25},  -- deeper blue with purple hint (11:00)
+    night = {0.01, 0.02, 0.08}   -- very dark blue (12:00)
 }
 
 -- function to get current water color based on time
@@ -781,6 +1040,9 @@ local function getCurrentWaterColor()
         return waterColors.night
     end
 end
+
+-- make getCurrentWaterColor accessible to other modules
+game.getCurrentWaterColor = getCurrentWaterColor
 
 -- function to get ambient light intensity (for glow effects)
 local function getAmbientLight()
@@ -846,6 +1108,103 @@ end
 function game.toggleDebug()
     debugOptions.showDebugButtons = not debugOptions.showDebugButtons
     print("Debug mode: " .. (debugOptions.showDebugButtons and "ON" or "OFF"))
+end
+
+-- update mobile button positions
+local function update_mobile_button_positions()
+    local button_size = mobile_controls.button_size
+    local spacing = mobile_controls.button_spacing
+    local screen_width = size.CANVAS_WIDTH
+    local screen_height = size.CANVAS_HEIGHT
+    
+    -- left and right buttons at bottom left
+    mobile_controls.buttons.left.x = button_size / 2 + spacing
+    mobile_controls.buttons.left.y = screen_height - button_size / 2 - spacing
+    
+    mobile_controls.buttons.right.x = button_size * 1.5 + spacing * 2
+    mobile_controls.buttons.right.y = screen_height - button_size / 2 - spacing
+    
+    -- forward button above left and right, centered
+    mobile_controls.buttons.forward.x = (mobile_controls.buttons.left.x + mobile_controls.buttons.right.x) / 2
+    mobile_controls.buttons.forward.y = screen_height - button_size * 1.5 - spacing * 2
+    
+    -- fish button at bottom right
+    mobile_controls.buttons.fish.x = screen_width - button_size / 2 - spacing
+    mobile_controls.buttons.fish.y = screen_height - button_size / 2 - spacing
+end
+
+-- check if a point is inside a button
+local function is_point_in_button(x, y, button)
+    local dx = x - button.x
+    local dy = y - button.y
+    local radius = mobile_controls.button_size / 2
+    return (dx * dx + dy * dy) <= radius * radius
+end
+
+-- handle mobile button press
+local function handle_mobile_button_press(x, y)
+    for button_name, button in pairs(mobile_controls.buttons) do
+        if is_point_in_button(x, y, button) then
+            button.pressed = true
+            return button_name
+        end
+    end
+    return nil
+end
+
+-- handle mobile button release
+local function handle_mobile_button_release(x, y)
+    for button_name, button in pairs(mobile_controls.buttons) do
+        if is_point_in_button(x, y, button) then
+            button.pressed = false
+            return button_name
+        end
+    end
+    return nil
+end
+
+-- draw mobile controls
+local function draw_mobile_controls()
+    -- update button positions
+    update_mobile_button_positions()
+    
+    for button_name, button in pairs(mobile_controls.buttons) do
+        local alpha = button.pressed and 1.0 or mobile_controls.button_alpha
+        local color_multiplier = button.pressed and 0.7 or 1.0
+        
+        -- draw button background (blue and rounded)
+        love.graphics.setColor(0.2 * color_multiplier, 0.6 * color_multiplier, 1.0 * color_multiplier, alpha)
+        love.graphics.circle("fill", button.x, button.y, mobile_controls.button_size / 2, 20)
+        
+        -- draw button border
+        love.graphics.setColor(0.1 * color_multiplier, 0.4 * color_multiplier, 0.8 * color_multiplier, alpha)
+        love.graphics.setLineWidth(3)
+        love.graphics.circle("line", button.x, button.y, mobile_controls.button_size / 2, 20)
+        
+        -- draw button text/icon
+        love.graphics.setColor(1, 1, 1, alpha)
+        local text = button.key:upper()
+        local font = love.graphics.getFont()
+        local text_width = font:getWidth(text)
+        local text_height = font:getHeight()
+        love.graphics.print(text, button.x - text_width / 2, button.y - text_height / 2)
+    end
+    
+    -- reset color
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- handle key presses in the game
+function game.keypressed(key)
+    if key == "escape" and fishing_minigame.is_active() then
+        local result = fishing_minigame.cancel_fishing()
+        if result then
+            add_catch_text("Fishing cancelled!")
+            print("Fishing cancelled!")
+            -- reset cooldown
+            fishing_cooldown = game_config.fishing_cooldown
+        end
+    end
 end
 
 function game.update(dt)
@@ -926,6 +1285,9 @@ function game.update(dt)
         -- update catch texts
         update_catch_texts(dt)
         
+        -- update shore objects
+        update_shore_objects()
+        
         -- update shopkeeper position
         shopkeeper:update(player_ship.x, player_ship.y, dt)
         
@@ -938,12 +1300,41 @@ function game.update(dt)
         -- update enemy spawning and movement
         spawnenemy.update(dt, camera, player_ship.x, player_ship.y)
 
+        -- update enemy ripples
+        local enemies = spawnenemy.get_enemies()
+        for _, enemy in ipairs(enemies) do
+            local dist_since_last_ripple = math.abs(enemy.x - enemy.last_ripple_pos.x)
+            
+            if enemy.speed > 50 and dist_since_last_ripple > RIPPLE_SPAWN_DIST then
+                table.insert(ship_ripples, 1, {
+                    x = enemy.x, 
+                    y = enemy.y, 
+                    spawn_time = player_ship.time_system.time, 
+                    intensity = math.min(0.8, enemy.speed / 500) -- Make enemy ripples slightly less intense
+                })
+                enemy.last_ripple_pos.x = enemy.x
+
+                if #ship_ripples > MAX_RIPPLES then
+                    table.remove(ship_ripples) -- remove oldest ripple
+                end
+            end
+        end
+
         -- check for collision with enemies
         local collided_enemy = spawnenemy.check_collision(player_ship.x, player_ship.y, player_ship.radius)
         if collided_enemy then
             -- clear any fishing text displays
             catch_texts = {}
             fishing_cooldown = 0
+            
+            -- interrupt fishing if active (fish escapes due to combat)
+            if fishing_minigame.is_active() then
+                local result = fishing_minigame.combat_interrupt()
+                if result then
+                    add_catch_text("Fish escaped due to combat!")
+                    print("Fishing interrupted by combat - fish escaped!")
+                end
+            end
             
             -- start combat
             gameState.combat.is_active = true
@@ -956,6 +1347,37 @@ function game.update(dt)
 
         -- some mechs
         fish(dt)
+        
+        -- update fishing mini-game
+        if fishing_minigame.is_active() then
+            local result = fishing_minigame.update(dt)
+            if result then
+                -- handle fishing result
+                if result.success then
+                    -- fish caught successfully
+                    if fishing.is_special_fish(result.fish_name) then
+                        trigger_special_fish_event(result.fish_name)
+                    else
+                        -- regular fish
+                        add_catch_text("You: " .. result.fish_name)
+                        table.insert(player_ship.caught_fish, result.fish_name)
+                        print("You caught: " .. result.fish_name .. " in " .. string.format("%.1f", result.total_time) .. "s")
+                    end
+                    
+                    trigger_ship_animation()
+                    
+                    -- fish quality is now calculated in the mini-game
+                    print("Final fish: " .. result.fish_name .. " (Quality score: " .. result.quality_score .. ")")
+                else
+                    -- fish escaped
+                    add_catch_text("Fish escaped!")
+                    print("Fish escaped!")
+                end
+                
+                -- reset cooldown
+                fishing_cooldown = game_config.fishing_cooldown
+            end
+        end
 
         ripples:update(dt, player_ship)
     end
@@ -1063,14 +1485,14 @@ function game.update(dt)
         
         -- adjust for screen center
         camera:goto(
-            center_x - love.graphics.getWidth()/(2 * camera.scale),
-            center_y - love.graphics.getHeight()/(2 * camera.scale)
+            center_x - size.CANVAS_WIDTH/(2 * camera.scale),
+            center_y - size.CANVAS_HEIGHT/(2 * camera.scale)
         )
     else
         -- normal camera following during gameplay
         camera:goto(
-            player_ship.x - love.graphics.getWidth()/2,
-            player_ship.y - love.graphics.getHeight()/2
+            player_ship.x - size.CANVAS_WIDTH/2,
+            player_ship.y - size.CANVAS_HEIGHT/2
         )
     end
     
@@ -1097,44 +1519,78 @@ end
 function game.draw()
     -- get current water color based off the time of day
     local waterColor = getCurrentWaterColor()
-    love.graphics.clear(waterColor[1], waterColor[2], waterColor[3])
+    love.graphics.clear(0, 0, 0, 1) -- Clear to black, shader will draw water
+    
+    -- Prepare ripple data to send to the shader
+    local ripple_x_data = {}
+    local ripple_y_data = {}
+    local ripple_time_data = {}
+    local ripple_intensity_data = {}
+    for i = 1, MAX_RIPPLES do
+        if ship_ripples[i] then
+            table.insert(ripple_x_data, ship_ripples[i].x)
+            table.insert(ripple_y_data, ship_ripples[i].y)
+            table.insert(ripple_time_data, ship_ripples[i].spawn_time)
+            table.insert(ripple_intensity_data, ship_ripples[i].intensity)
+        else
+            -- Pad with zeros if we have less than MAX_RIPPLES
+            table.insert(ripple_x_data, 0)
+            table.insert(ripple_y_data, 0)
+            table.insert(ripple_time_data, 0)
+            table.insert(ripple_intensity_data, 0)
+        end
+    end
+    
+    -- Draw the water shader on the background
+    love.graphics.setShader(water_shader)
+    water_shader:send("time", player_ship.time_system.time)
+    water_shader:send("waterColor", {waterColor[1], waterColor[2], waterColor[3]})
+    water_shader:send("shoreY", shore_division)
+    water_shader:send("camera", {camera.x, camera.y})
+    water_shader:send("resolution", {size.CANVAS_WIDTH, size.CANVAS_HEIGHT})
+    -- Send ripple data
+    water_shader:send("ripple_count", #ship_ripples)
+    water_shader:send("ripple_sources_x", unpack(ripple_x_data))
+    water_shader:send("ripple_sources_y", unpack(ripple_y_data))
+    water_shader:send("ripple_spawn_times", unpack(ripple_time_data))
+    water_shader:send("ripple_intensities", unpack(ripple_intensity_data))
+    
+    love.graphics.rectangle("fill", 0, 0, size.CANVAS_WIDTH, size.CANVAS_HEIGHT)
+    love.graphics.setShader()
 
     love.graphics.push()
     love.graphics.translate(-camera.x * camera.scale, -camera.y * camera.scale)
     love.graphics.scale(camera.scale)
 
-    -- draw ripples first as background effect
-    ripples:draw()
+    -- draw shore objects
+    local viewWidth = size.CANVAS_WIDTH / camera.scale
+    
+    -- draw only shore objects that are visible
+    for _, obj in ipairs(shore_objects) do
+        -- check if object is within the visible area (with a buffer of one texture width for safety)
+        if obj.x + shore_width > camera.x and obj.x < camera.x + viewWidth then
+            -- use shader to make green pixels transparent
+            love.graphics.setShader(shore_shader)
+            shore_shader:send("greenPixel", {0, 1, 0})  -- green (0, 255, 0) normalized to 0-1
+            
+            -- draw the texture FLIPPED VERTICALLY using the quad
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.draw(shore_texture, shore_quad, obj.x, obj.y - shore_height / 2.2, 0, 1, -1, 0, shore_quad_height)
+            
+            -- Draw the bottom half of the shore texture repeating upwards
+            local overlap = 10 -- pixels to overlap each stacked piece
+            for i = 1, 10 do
+                local y_pos = obj.y - shore_quad_height - ((i - 1) * bottom_half_quad_height) + ((i - 1) * overlap)
+                love.graphics.draw(shore_texture, bottom_half_quad, obj.x, y_pos, 0, 1, -1, 0, bottom_half_quad_height)
+            end
+            
+            -- reset shader
+            love.graphics.setShader()
+        end
+    end
     
     -- only draw game world if not sleeping
     if not player_ship.time_system.is_sleeping then
-        -- draw the shore using repeating texture
-        local viewWidth = love.graphics.getWidth() / camera.scale
-        local viewHeight = love.graphics.getHeight() / camera.scale
-        local shoreExtension = 1000 -- how far the shore extends beyond the viewport
-        
-        -- calculate how many times we need to repeat the shore texture
-        local total_width = viewWidth + shoreExtension * 2
-        local start_x = camera.x - shoreExtension
-        local shore_top = -1000  -- extend well above viewport
-        local shore_bottom = shore_division
-        
-        -- find the leftmost position to start drawing (aligned to texture width)
-        local aligned_start_x = math.floor(start_x / shore_width) * shore_width
-        local num_repeats = math.ceil(total_width / shore_width) + 2  -- +2 for safety margin
-        
-        love.graphics.setColor(1, 1, 1, 1)  -- full white tint
-        
-        -- draw repeating shore texture
-        for i = 0, num_repeats do
-            local x = aligned_start_x + (i * shore_width)
-            
-            -- scale the texture vertically to fill from shore_top to shore_division
-            local scale_y = (shore_bottom - shore_top) / shore_height
-            
-            love.graphics.draw(shore_texture, x, shore_top, 0, 1, scale_y)
-        end
-        
         -- draw the shopkeeper
         shopkeeper:draw()
 
@@ -1314,8 +1770,8 @@ function game.draw()
                 local scale = 2.0  -- make text larger
                 
                 -- calculate screen center
-                local screen_center_x = love.graphics.getWidth() / 2
-                local screen_center_y = love.graphics.getHeight() / 2
+                local screen_center_x = size.CANVAS_WIDTH / 2
+                local screen_center_y = size.CANVAS_HEIGHT / 2
                 
                 -- convert to world coordinates
                 local world_x = screen_center_x / camera.scale + camera.x
@@ -1379,26 +1835,28 @@ function game.draw()
             end
         end
         
-        -- draw catch texts
-        for _, catch in ipairs(catch_texts) do
-            local alpha = catch.time / game_config.fishing_cooldown  -- fade out over time
-            local font = love.graphics.getFont()
-            local text_width = font:getWidth(catch.text)
-            local text_height = font:getHeight()
-            local text_x = player_ship.x - 40
-            local text_y = player_ship.y - 60 - catch.y_offset
-            
-            -- draw inverted background
-            local waterColor = getCurrentWaterColor()
-            local inverted_r = 1 - waterColor[1]
-            local inverted_g = 1 - waterColor[2]
-            local inverted_b = 1 - waterColor[3]
-            love.graphics.setColor(inverted_r, inverted_g, inverted_b, alpha * 0.8)
-            love.graphics.rectangle("fill", text_x - 2, text_y - 1, text_width + 4, text_height + 2)
-            
-            -- draw text
-            love.graphics.setColor(1, 1, 1, alpha)
-            love.graphics.print(catch.text, text_x, text_y)
+        -- draw catch texts normally in the game world (only when not in combat)
+        if not gameState.combat.is_active then
+            for _, catch in ipairs(catch_texts) do
+                local alpha = catch.time / game_config.fishing_cooldown  -- fade out over time
+                local font = love.graphics.getFont()
+                local text_width = font:getWidth(catch.text)
+                local text_height = font:getHeight()
+                local text_x = player_ship.x - 40
+                local text_y = player_ship.y - 60 - catch.y_offset
+                
+                -- draw inverted background
+                local waterColor = getCurrentWaterColor()
+                local inverted_r = 1 - waterColor[1]
+                local inverted_g = 1 - waterColor[2]
+                local inverted_b = 1 - waterColor[3]
+                love.graphics.setColor(inverted_r, inverted_g, inverted_b, alpha * 0.8)
+                love.graphics.rectangle("fill", text_x - 2, text_y - 1, text_width + 4, text_height + 2)
+                
+                -- draw text
+                love.graphics.setColor(1, 1, 1, alpha)
+                love.graphics.print(catch.text, text_x, text_y)
+            end
         end
         
         -- draw fishing cooldown indicator if on cooldown
@@ -1417,6 +1875,24 @@ function game.draw()
             end
         end
         
+        -- draw area danger indicator
+        local spawn_status = spawnenemy.get_spawn_status(player_ship.y)
+        if spawn_status.is_dangerous then
+            love.graphics.setColor(1, 0.3, 0.3, 0.9)  -- red warning color
+            love.graphics.print("DANGEROUS AREA - No Port-a-Shop!", 
+                player_ship.x - 80, 
+                player_ship.y - 80)
+            love.graphics.setColor(1, 0.5, 0.5, 0.8)
+            love.graphics.print(string.format("Enemies: %d/%d (Spawn: %.1fs)", 
+                spawn_status.enemy_count, spawn_status.max_enemies, spawn_status.spawn_interval), 
+                player_ship.x - 60, 
+                player_ship.y - 60)
+            love.graphics.setColor(1, 0.7, 0.7, 0.9)
+            love.graphics.print("ENEMY SPEED: 7x MULTIPLIER!", 
+                player_ship.x - 70, 
+                player_ship.y - 100)
+        end
+        
         -- update last cooldown for next frame
         last_cooldown = fishing_cooldown
         
@@ -1433,7 +1909,7 @@ function game.draw()
     -- draw day/night fade overlay
     if player_ship.time_system.is_fading or player_ship.time_system.fade_alpha > 0 then
         love.graphics.setColor(0, 0, 0, player_ship.time_system.fade_alpha)
-        love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+        love.graphics.rectangle("fill", 0, 0, size.CANVAS_WIDTH, size.CANVAS_HEIGHT)
         
         -- draw sleep message when fully black
         if player_ship.time_system.is_sleeping and player_ship.time_system.fade_alpha > 0.9 then
@@ -1442,8 +1918,8 @@ function game.draw()
             local font = love.graphics.getFont()
             local text_width = font:getWidth(sleep_text)
             love.graphics.print(sleep_text, 
-                (love.graphics.getWidth() - text_width) / 2,
-                love.graphics.getHeight() / 2)
+                (size.CANVAS_WIDTH - text_width) / 2,
+                size.CANVAS_HEIGHT / 2)
         end
     end
 
@@ -1530,12 +2006,40 @@ function game.draw()
         
         -- show debug status
         love.graphics.print("Debug Mode (F3 to toggle)", 10, 100)
+        
+        -- toggle mobile controls button
+        if suit.Button("Toggle Mobile Controls", suit.layout:row(150, 30)).hit then
+            mobile_controls.enabled = not mobile_controls.enabled
+            print("Mobile controls: " .. (mobile_controls.enabled and "ON" or "OFF"))
+        end
+        
+        if suit.Button("Print Shore Positions", suit.layout:row(150, 30)).hit then
+            print("--- Shore Debug Info ---")
+            print(string.format("Player Position: x=%.2f, y=%.2f", player_ship.x, player_ship.y))
+            print("Shore Object Positions:")
+            for i, obj in ipairs(shore_objects) do
+                print(string.format("  [%d]: x=%.2f, y=%.2f", i, obj.x, obj.y))
+            end
+            print("------------------------")
+        end
     end
 
+
+    
     -- draw white flash overlay for defeat
     if gameState.combat.defeat_flash and gameState.combat.defeat_flash.active then
         love.graphics.setColor(1, 1, 1, gameState.combat.defeat_flash.alpha)
-        love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+        love.graphics.rectangle("fill", 0, 0, size.CANVAS_WIDTH, size.CANVAS_HEIGHT)
+    end
+    
+    -- draw fishing mini-game
+    if fishing_minigame.is_active() then
+        fishing_minigame.draw()
+    end
+    
+    -- draw mobile controls
+    if mobile_controls.enabled then
+        draw_mobile_controls()
     end
 
     -- reset color
@@ -1548,7 +2052,7 @@ function game.draw()
     if special_fish_event.active then
         -- darkened background
         love.graphics.setColor(0, 0, 0, 0.7)
-        love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+        love.graphics.rectangle("fill", 0, 0, size.CANVAS_WIDTH, size.CANVAS_HEIGHT)
         
         -- center message
         love.graphics.setColor(1, 1, 1, 1)
@@ -1562,8 +2066,8 @@ function game.draw()
         love.graphics.scale(scale, scale)
         love.graphics.print(
             message,
-            (love.graphics.getWidth() / scale - text_width) / 2,
-            love.graphics.getHeight() / scale / 2 - 20
+            (size.CANVAS_WIDTH / scale - text_width) / 2,
+            size.CANVAS_HEIGHT / scale / 2 - 20
         )
         love.graphics.pop()
         
@@ -1573,7 +2077,7 @@ function game.draw()
             for i = 1, 3 do
                 local radius = 100 - i * 20
                 love.graphics.setColor(1, 0.8, 0, 0.1)
-                love.graphics.circle("fill", love.graphics.getWidth() / 2, love.graphics.getHeight() / 2 + 30, radius)
+                love.graphics.circle("fill", size.CANVAS_WIDTH / 2, size.CANVAS_HEIGHT / 2 + 30, radius)
             end
         end
     end
@@ -1581,5 +2085,9 @@ end
 
 -- make player_ship accessible to other modules
 game.player_ship = player_ship
+
+-- make mobile control functions accessible to other modules
+game.handle_mobile_button_press = handle_mobile_button_press
+game.handle_mobile_button_release = handle_mobile_button_release
 
 return game
