@@ -5,6 +5,7 @@ local fish = {
     "Bluegill",
     "Crappie",
     "Yellow Perch",
+    "Redfin Pickerel",
     "Bullhead Catfish",
     
     -- popular game fish

@@ -3,6 +3,7 @@ local suit = require "SUIT"
 local fishing = require("game.fishing")
 local combat = require("game.combat")  -- add combat module
 local size = require("game.size")
+local GameType = require("game.gametypes")
 
 -- player's inventory (should be moved to a proper inventory system later)
 local coins = 0
@@ -171,7 +172,7 @@ local function check_shop_interaction(player_x, player_y, shopkeeper)
     return any_shop_active
 end
 
-function shop.update(game_state, player_ship, shopkeeper, game_config)
+function shop.update(gamestate, player_ship, shopkeeper, game_config)
     -- update animation timers for all shops
     local dt = love.timer.getDelta()
     
@@ -233,9 +234,13 @@ function shop.update(game_state, player_ship, shopkeeper, game_config)
     
     -- check if player is in range of any shop
     local shop_active = check_shop_interaction(player_ship.x, player_ship.y, shopkeeper)
-    current_state = shop_active and "shop" or ""
+    if shop_active and gamestate.get() == GameType.VOYAGE then
+        gamestate.set(GameType.SHOP)
+    elseif not shop_active and gamestate.get():find(GameType.SHOP, 1, true) then
+        gamestate.set(GameType.VOYAGE)
+    end
     
-    if current_state ~= "shop" then return end
+    if not gamestate.get():find(GameType.SHOP, 1, true) then return end
     
     -- update message timer
     if message_timer > 0 then
@@ -249,7 +254,7 @@ function shop.update(game_state, player_ship, shopkeeper, game_config)
     local window_width = size.CANVAS_WIDTH
     local window_height = love.graphics.getHeight()
     
-    if inventory_state.mode == "transfer" then
+    if gamestate.get() == GameType.SHOP_TRANSFER then
         -- transfer interface
         suit.layout:reset(window_width/2 - 300, 50)
         suit.Label("Transfer Fish to Inventory (5 coins each)", {align = "center"}, suit.layout:row(600, 30))
@@ -311,11 +316,11 @@ function shop.update(game_state, player_ship, shopkeeper, game_config)
         
         -- back button
         suit.layout:reset(window_width/2 - 100, window_height - 100)
-        if suit.Button("Back", suit.layout:row(200, 30)).hit then
-            inventory_state.mode = ""
+        if suit.Button("Back to Shop", suit.layout:row(200, 30)).hit then
+            gamestate.set(GameType.SHOP)
         end
         
-    elseif inventory_state.mode == "view" then
+    elseif gamestate.get() == GameType.SHOP_VIEW_INVENTORY then
         -- view inventory interface
         suit.layout:reset(window_width/2 - 300, 50)
         suit.Label("Fish Inventory", {align = "center"}, suit.layout:row(600, 40))
@@ -415,8 +420,8 @@ function shop.update(game_state, player_ship, shopkeeper, game_config)
         
         -- back button
         suit.layout:reset(window_width/2 - 100, window_height - 100)
-        if suit.Button("Back", suit.layout:row(200, 30)).hit then
-            inventory_state.mode = ""
+        if suit.Button("Back to Shop", suit.layout:row(200, 30)).hit then
+            gamestate.set(GameType.SHOP)
             inventory_state.scroll_offset = 0  -- reset scroll when leaving
         end
         
@@ -591,7 +596,7 @@ function shop.update(game_state, player_ship, shopkeeper, game_config)
     suit.layout:reset(grid_start_x + (section_width + padding) * 2, row3_y)
     suit.Label("Fish Inventory", {align = "center"}, suit.layout:row(section_width, 30))
     if suit.Button("Transfer to Inventory", suit.layout:row(section_width, 30)).hit then
-        inventory_state.mode = "transfer"
+        gamestate.set(GameType.SHOP_TRANSFER)
         inventory_state.search_text.text = ""
         inventory_state.selected_fish = nil
         -- create filtered fish list
@@ -601,7 +606,7 @@ function shop.update(game_state, player_ship, shopkeeper, game_config)
         end
     end
     if suit.Button("View Inventory", suit.layout:row(section_width, 30)).hit then
-        inventory_state.mode = "view"
+        gamestate.set(GameType.SHOP_VIEW_INVENTORY)
     end
     
     end -- close the else block for regular shop interface
@@ -687,10 +692,10 @@ function shop.draw_shops(camera)
 end
 
 -- draw the shop ui overlay
-function shop.draw_ui()
-    if current_state == "shop" then
+function shop.draw_ui(gamestate)
+    if gamestate.get():find(GameType.SHOP, 1, true) then
         -- draw full-screen semi-transparent background (darker for inventory)
-        local alpha = inventory_state.mode ~= "" and 0.9 or 0.85
+        local alpha = gamestate.get() ~= GameType.SHOP and 0.9 or 0.85
         love.graphics.setColor(0, 0, 0, alpha)
         love.graphics.rectangle("fill", 0, 0, size.CANVAS_WIDTH, size.CANVAS_HEIGHT)
         love.graphics.setColor(1, 1, 1, 1)

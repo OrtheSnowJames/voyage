@@ -2,9 +2,20 @@ local game = require("game")
 local menu = require("menu")
 local suit = require "SUIT"
 local size = require("game.size")
+local gamestate = require("game.gamestate")
+local GameType = require("game.gametypes")
 
-local state = "menu"
 local ship_name = ""  -- store ship name globally
+
+local game_states = {
+    [GameType.VOYAGE] = true,
+    [GameType.FISHING] = true,
+    [GameType.COMBAT] = true,
+    [GameType.SHOP] = true,
+    [GameType.SHOP_TRANSFER] = true,
+    [GameType.SHOP_VIEW_INVENTORY] = true,
+    [GameType.SLEEPING] = true,
+}
 
 -- Canvas system for consistent rendering
 local canvas = nil
@@ -15,24 +26,27 @@ function love.load()
     -- Create the fixed-size canvas
     canvas = love.graphics.newCanvas(CANVAS_WIDTH, CANVAS_HEIGHT)
     
+    gamestate.set(GameType.MENU)
     game.load()
     menu.load()
 end
 
 function love.update(dt)
-    if state == "game" then
-        local new_state = game.update(dt)
-        if new_state then
-            state = new_state
+    if game_states[gamestate.get()] then
+        local next_state_str = game.update(dt)
+        if next_state_str then
+            gamestate.set(next_state_str) -- Should only be "menu"
         end
-    elseif state == "menu" then
-        local new_state = menu.update(dt)
-        if new_state then
+    elseif gamestate.get() == GameType.MENU then
+        local next_state_str = menu.update(dt)
+        if next_state_str then
             -- store ship name before transitioning to game
-            if new_state == "game" then
+            if next_state_str == "game" then
                 ship_name = menu.get_ship_name()
+                gamestate.set(GameType.VOYAGE)
+            else
+                gamestate.set(next_state_str)
             end
-            state = new_state
         end
     end
 end
@@ -44,9 +58,9 @@ function love.draw()
     love.graphics.clear()
     
     -- Draw everything to the canvas at fixed 800x600 resolution
-    if state == "game" then
+    if game_states[gamestate.get()] then
         game.draw()
-    elseif state == "menu" then
+    elseif gamestate.get() == GameType.MENU then
         menu.draw()
     end
     
@@ -73,7 +87,7 @@ function love.keypressed(key)
     if key == "f3" then
         game.toggleDebug()
     end
-    if state == "game" then
+    if game_states[gamestate.get()] then
         game.keypressed(key)
     end
     suit.keypressed(key)
@@ -86,7 +100,7 @@ function love.mousepressed(x, y, button)
         suit.updateMouse(canvas_x, canvas_y, true)
         
         -- handle mobile button press
-        if state == "game" then
+        if game_states[gamestate.get()] then
             local game_module = require("game")
             if game_module.handle_mobile_button_press then
                 game_module.handle_mobile_button_press(canvas_x, canvas_y)
@@ -101,7 +115,7 @@ function love.mousereleased(x, y, button)
         suit.updateMouse(canvas_x, canvas_y, false)
         
         -- handle mobile button release
-        if state == "game" then
+        if game_states[gamestate.get()] then
             local game_module = require("game")
             if game_module.handle_mobile_button_release then
                 game_module.handle_mobile_button_release(canvas_x, canvas_y)

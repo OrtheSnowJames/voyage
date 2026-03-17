@@ -10,6 +10,9 @@ local shop = require("shop")
 local spawnenemy = require("game.spawnenemy")
 local menu = require("menu")  -- add menu requirement to get ship name
 local size = require("game.size")
+local gamestate = require("game.gamestate")
+local GameType = require("game.gametypes")
+local morningtext = require("game.morningtext")
 
 -- game configuration (modifiable during runtime)
 local game_config = {
@@ -55,9 +58,7 @@ local mobile_controls = {
 }
 
 local gameState = {
-    focus = "", -- either "voyage", "sleep", "shop", "attack"
     combat = {
-        is_active = false,
         zoom_progress = 0,
         zoom_duration = 2.0,  -- 2 seconds for zoom animation
         target_zoom = 2.0,    -- zoom in 2x for combat
@@ -107,6 +108,10 @@ local player_ship = {
     direction = 0,
     caught_fish = {},
     inventory = {},
+    rainbows = 0,
+    corruption_started = false,
+    debug_menu_opened = false,
+    reached_first_1130 = false,
     time_system = {
         time = 0,
         DAY_LENGTH = 12 * 60,
@@ -456,10 +461,13 @@ local function reset_game()
     player_ship.sword = "Basic Sword"
     player_ship.caught_fish = {}
     player_ship.inventory = {}
+    player_ship.rainbows = 0
+    player_ship.corruption_started = false
+    player_ship.debug_menu_opened = false
+    player_ship.reached_first_1130 = false
     player_ship.time_system.time = 0
 
     -- reset combat and defeat flash state
-    gameState.combat.is_active = false
     gameState.combat.zoom_progress = 0
     gameState.combat.enemy = nil
     gameState.combat.result = nil
@@ -495,6 +503,9 @@ local function reset_game()
     -- reset ship_ripples
     ship_ripples = {}
     last_player_ripple_pos = {x=player_ship.x, y=player_ship.y}
+    cheat_runtime.last_observed_time = player_ship.time_system.time
+
+    morningtext.reset()
 end
 
 function ripples:spawn(player_ship, x, y)
@@ -793,6 +804,169 @@ function camera:zoom(factor, target_x, target_y)
     end
 end
 
+local GOLD_STURGEON_UNLOCK_HOUR = 11.5
+local REGULAR_FISH_COUNT = 30
+local CHEAT_DEPTH_TOLERANCE = 10
+local TIME_SKIP_CHEAT_THRESHOLD_SECONDS = 20
+local RAINBOWS_START_VALUE = 0.1
+local RAINBOWS_STEP = 0.1
+
+local cheat_runtime = {
+    last_observed_time = nil
+}
+
+local function get_time_of_day_hours()
+    return (player_ship.time_system.time / player_ship.time_system.DAY_LENGTH) * 12
+end
+
+local function has_fish(fish_name)
+    for _, caught in ipairs(player_ship.caught_fish or {}) do
+        if caught == fish_name then
+            return true
+        end
+    end
+
+    for _, stored in ipairs(player_ship.inventory or {}) do
+        if stored == fish_name then
+            return true
+        end
+    end
+
+    return special_fish_event.active and special_fish_event.fish_name == fish_name
+end
+
+local function get_required_depth_for_fish(fish_name)
+    local fish_value = fishing.get_fish_value(fish_name)
+    if fish_value == 100000 then
+        return nil -- Gold Sturgeon is handled by the time rule below.
+    end
+
+    if fish_value <= REGULAR_FISH_COUNT then
+        return math.max(1, fish_value - 2)
+    end
+
+    local night_fish_index = fish_value - REGULAR_FISH_COUNT
+    return math.max(1, night_fish_index - 1)
+end
+
+local function force_corruption_sleep_if_needed()
+    if player_ship.corruption_started then
+        return false
+    end
+
+    local current_rainbows = tonumber(player_ship.rainbows) or 0
+    if math.abs(current_rainbows - RAINBOWS_START_VALUE) > 0.0001 then
+        return false
+    end
+
+    if player_ship.time_system.is_fading or player_ship.time_system.is_sleeping then
+        return false
+    end
+
+    player_ship.corruption_started = true
+    player_ship.time_system.time = 0
+    player_ship.time_system.is_fading = true
+    player_ship.time_system.fade_timer = 0
+    player_ship.time_system.fade_direction = "out"
+    player_ship.time_system.fade_alpha = 0
+    player_ship.time_system.is_sleeping = false
+    gamestate.set(GameType.SLEEPING)
+    print("Rainbows reached 0.1 - forcing immediate sleep to begin corruption.")
+    return true
+end
+
+local function flag_save_as_rainbows(reason)
+    local current_rainbows = tonumber(player_ship.rainbows) or 0
+    if current_rainbows >= RAINBOWS_START_VALUE then
+        return
+    end
+
+    player_ship.rainbows = RAINBOWS_START_VALUE
+    print(string.format("Cheat detector flagged save: %s (rainbows=%.1f)", reason, player_ship.rainbows))
+    serialize.save_data(game.get_saveable_data())
+    force_corruption_sleep_if_needed()
+end
+
+local function increase_rainbows_for_new_day()
+    local current_rainbows = tonumber(player_ship.rainbows) or 0
+    if current_rainbows < RAINBOWS_START_VALUE or current_rainbows >= 1 then
+        return false
+    end
+
+    local next_rainbows = math.min(1, math.floor((current_rainbows + RAINBOWS_STEP) * 10 + 0.5) / 10)
+    if next_rainbows > current_rainbows then
+        player_ship.rainbows = next_rainbows
+        print(string.format("Rainbows increased to %.1f", player_ship.rainbows))
+        serialize.save_data(game.get_saveable_data())
+        return true
+    end
+
+    return false
+end
+
+local function detect_cheating()
+    local current_time = player_ship.time_system.time or 0
+    local previous_time = cheat_runtime.last_observed_time
+    cheat_runtime.last_observed_time = current_time
+
+    local current_rainbows = tonumber(player_ship.rainbows) or 0
+    if current_rainbows >= RAINBOWS_START_VALUE or player_ship.debug_menu_opened then
+        return false
+    end
+
+    if previous_time ~= nil then
+        local day_length = player_ship.time_system.DAY_LENGTH or (12 * 60)
+        local delta_time = current_time - previous_time
+        if delta_time < 0 then
+            delta_time = delta_time + day_length
+        end
+
+        if delta_time > TIME_SKIP_CHEAT_THRESHOLD_SECONDS then
+            flag_save_as_rainbows(string.format(
+                "time jumped by %.1f seconds in one tick",
+                delta_time
+            ))
+            return true
+        end
+    end
+
+    if get_time_of_day_hours() >= GOLD_STURGEON_UNLOCK_HOUR then
+        player_ship.reached_first_1130 = true
+    end
+
+    if has_fish("Gold Sturgeon") and not player_ship.reached_first_1130 then
+        flag_save_as_rainbows("Gold Sturgeon owned before first 11:30")
+        return true
+    end
+
+    local last_shop_y = shop.get_last_port_a_shop_y() or 0
+    local shop_depth_level = math.max(1, math.floor(last_shop_y / 1000))
+    local max_expected_depth = shop_depth_level + CHEAT_DEPTH_TOLERANCE
+
+    local fish_lists = {
+        player_ship.caught_fish or {},
+        player_ship.inventory or {}
+    }
+
+    for _, fish_list in ipairs(fish_lists) do
+        for _, fish_name in ipairs(fish_list) do
+            local required_depth = get_required_depth_for_fish(fish_name)
+            if required_depth and required_depth > max_expected_depth then
+                local reason = string.format(
+                    "%s requires depth %d, shop progression suggests <= %d",
+                    fish_name,
+                    required_depth,
+                    max_expected_depth
+                )
+                flag_save_as_rainbows(reason)
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 -- get saveable data (excluding functions)
 function game.get_saveable_data()
     local data = {}
@@ -832,9 +1006,38 @@ function game.load()
         player_ship.name = menu.get_name()
         serialize.save_data(game.get_saveable_data())
     end
+
+    -- migration defaults for older saves
+    player_ship.caught_fish = player_ship.caught_fish or {}
+    player_ship.inventory = player_ship.inventory or {}
+
+    if player_ship.rainbows == true then
+        player_ship.rainbows = RAINBOWS_START_VALUE
+    elseif type(player_ship.rainbows) ~= "number" then
+        player_ship.rainbows = 0
+    else
+        player_ship.rainbows = math.max(0, math.min(1, player_ship.rainbows))
+    end
+
+    if player_ship.corruption_started == nil then
+        player_ship.corruption_started = (tonumber(player_ship.rainbows) or 0) > RAINBOWS_START_VALUE
+    else
+        player_ship.corruption_started = player_ship.corruption_started == true
+    end
+
+    player_ship.debug_menu_opened = player_ship.debug_menu_opened == true
+
+    if player_ship.reached_first_1130 == nil then
+        player_ship.reached_first_1130 = has_fish("Gold Sturgeon") or get_time_of_day_hours() >= GOLD_STURGEON_UNLOCK_HOUR
+    else
+        player_ship.reached_first_1130 = player_ship.reached_first_1130 == true
+    end
     
     -- initialize shore objects
     init_shore_objects()
+    cheat_runtime.last_observed_time = player_ship.time_system.time
+    detect_cheating()
+    morningtext.start(player_ship.rainbows)
 end
 
 -- ship animation
@@ -958,7 +1161,7 @@ function fish(dt)
     end
 
     -- player-initiated fishing
-    if fishing_released and fishing_cooldown <= 0 and not fishing_minigame.is_active() then
+    if fishing_released and fishing_cooldown <= 0 and gamestate.get() == GameType.VOYAGE then
         -- start fishing mini-game
         local fish_available = fishing.get_fish_avalible(player_ship.x, player_ship.y, player_ship.time_system.time)
         local depth_level = math.floor(math.abs(player_ship.y) / 1000)
@@ -966,6 +1169,7 @@ function fish(dt)
         
         local current_water_color = game.getCurrentWaterColor()
         fishing_minigame.start_fishing(fish_available, fishing.get_rod_rarity(player_ship.rod), depth_level, current_water_color)
+        gamestate.set(GameType.FISHING)
     end
 end
 
@@ -1123,6 +1327,9 @@ end
 
 function game.toggleDebug()
     debugOptions.showDebugButtons = not debugOptions.showDebugButtons
+    if debugOptions.showDebugButtons then
+        player_ship.debug_menu_opened = true
+    end
     print("Debug mode: " .. (debugOptions.showDebugButtons and "ON" or "OFF"))
 end
 
@@ -1212,36 +1419,48 @@ end
 
 -- handle key presses in the game
 function game.keypressed(key)
-    if key == "escape" and fishing_minigame.is_active() then
+    if key == "escape" and gamestate.get() == GameType.FISHING then
         local result = fishing_minigame.cancel_fishing()
         if result then
             add_catch_text("Fishing cancelled!")
             print("Fishing cancelled!")
             -- reset cooldown
             fishing_cooldown = game_config.fishing_cooldown
+            gamestate.set(GameType.VOYAGE)
         end
     end
 end
 
 function game.update(dt)
+    morningtext.update(dt)
+    force_corruption_sleep_if_needed()
+
     -- update day-night cycle - only if not in combat
-    if not gameState.combat.is_active then
+    if gamestate.get() ~= GameType.COMBAT then
         if not player_ship.time_system.is_sleeping then
             player_ship.time_system.time = player_ship.time_system.time + dt
+
+            if not player_ship.reached_first_1130 and get_time_of_day_hours() >= GOLD_STURGEON_UNLOCK_HOUR then
+                player_ship.reached_first_1130 = true
+            end
             
             -- check if we've reached the end of the day (12 minutes)
             if player_ship.time_system.time >= player_ship.time_system.DAY_LENGTH then
+                increase_rainbows_for_new_day()
                 player_ship.time_system.time = 0
                 player_ship.time_system.is_fading = true
                 player_ship.time_system.fade_timer = 0
                 player_ship.time_system.fade_direction = "out"
+                gamestate.set(GameType.SLEEPING)
                 print("Starting night transition...")
             end
         end
     end
+
+    detect_cheating()
     
     -- handle fading and sleep state - only if not in combat
-    if not gameState.combat.is_active then
+    if gamestate.get() ~= GameType.COMBAT then
         if player_ship.time_system.is_fading then
             player_ship.time_system.fade_timer = player_ship.time_system.fade_timer + dt
             
@@ -1274,6 +1493,8 @@ function game.update(dt)
                     player_ship.time_system.is_fading = false
                     player_ship.time_system.is_sleeping = false
                     player_ship.time_system.fade_alpha = 0
+                    gamestate.set(GameType.VOYAGE)
+                    morningtext.start(player_ship.rainbows)
                     
                     -- save game after fully waking up
                     player_ship.name = menu.get_name()
@@ -1287,32 +1508,26 @@ function game.update(dt)
         player_ship.name = menu.get_name()
         local data = game.get_saveable_data()
         serialize.save_data(data)
-        return "menu"
+        gamestate.set(GameType.MENU)
+        return GameType.MENU
     end
 
-    -- only update game elements if not sleeping and not in combat
-    if not player_ship.time_system.is_sleeping and not gameState.combat.is_active then
-        -- update ship
+    -- Update shop state and UI. The function itself is responsible for checking the state.
+    local current_state = gamestate.get()
+    if current_state == GameType.VOYAGE or current_state:find(GameType.SHOP, 1, true) then
+        shop.update(gamestate, player_ship, shopkeeper, game_config)
+        -- Allow movement and related updates while in shop
         player_ship:update(dt)
-        
-        -- update ship animation
         update_ship_animation(dt)
-        
+        update_shore_objects()
+        shopkeeper:update(player_ship.x, player_ship.y, dt)
+    end
+
+    -- only update things that should pause during shop
+    if gamestate.get() == GameType.VOYAGE then
         -- update catch texts
         update_catch_texts(dt)
         
-        -- update shore objects
-        update_shore_objects()
-        
-        -- update shopkeeper position
-        shopkeeper:update(player_ship.x, player_ship.y, dt)
-        
-        -- update shop
-        local new_state = shop.update(gameState, player_ship, shopkeeper, game_config)
-        if new_state then
-            return new_state
-        end
-
         -- update enemy spawning and movement
         spawnenemy.update(dt, camera, player_ship.x, player_ship.y)
 
@@ -1344,7 +1559,7 @@ function game.update(dt)
             fishing_cooldown = 0
             
             -- interrupt fishing if active (fish escapes due to combat)
-            if fishing_minigame.is_active() then
+            if gamestate.get() == GameType.FISHING then
                 local result = fishing_minigame.combat_interrupt()
                 if result then
                     add_catch_text("Fish escaped due to combat!")
@@ -1353,7 +1568,7 @@ function game.update(dt)
             end
             
             -- start combat
-            gameState.combat.is_active = true
+            gamestate.set(GameType.COMBAT)
             gameState.combat.zoom_progress = 0
             gameState.combat.enemy = collided_enemy
             gameState.combat.result = nil
@@ -1364,43 +1579,45 @@ function game.update(dt)
         -- some mechs
         fish(dt)
         
-        -- update fishing mini-game
-        if fishing_minigame.is_active() then
-            local result = fishing_minigame.update(dt)
-            if result then
-                -- handle fishing result
-                if result.success then
-                    -- fish caught successfully
-                    if fishing.is_special_fish(result.fish_name) then
-                        trigger_special_fish_event(result.fish_name)
-                    else
-                        -- regular fish
-                        add_catch_text("You: " .. result.fish_name)
-                        table.insert(player_ship.caught_fish, result.fish_name)
-                        print("You caught: " .. result.fish_name .. " in " .. string.format("%.1f", result.total_time) .. "s")
-                    end
-                    
-                    trigger_ship_animation()
-                    
-                    -- fish quality is now calculated in the mini-game
-                    print("Final fish: " .. result.fish_name .. " (Quality score: " .. result.quality_score .. ")")
-                else
-                    -- fish escaped
-                    add_catch_text("Fish escaped!")
-                    print("Fish escaped!")
-                    player_just_failed_fishing = true -- set the flag
-                end
-                
-                -- reset cooldown
-                fishing_cooldown = game_config.fishing_cooldown
-            end
-        end
-
-        ripples:update(dt, player_ship)
     end
     
+    -- update fishing mini-game
+    if gamestate.get() == GameType.FISHING then
+        local result = fishing_minigame.update(dt)
+        if result then
+            gamestate.set(GameType.VOYAGE)
+            -- handle fishing result
+            if result.success then
+                -- fish caught successfully
+                if fishing.is_special_fish(result.fish_name) then
+                    trigger_special_fish_event(result.fish_name)
+                else
+                    -- regular fish
+                    add_catch_text("You: " .. result.fish_name)
+                    table.insert(player_ship.caught_fish, result.fish_name)
+                    print("You caught: " .. result.fish_name .. " in " .. string.format("%.1f", result.total_time) .. "s")
+                end
+                
+                trigger_ship_animation()
+                
+                -- fish quality is now calculated in the mini-game
+                print("Final fish: " .. result.fish_name .. " (Quality score: " .. result.quality_score .. ")")
+            else
+                -- fish escaped
+                add_catch_text("Fish escaped!")
+                print("Fish escaped!")
+                player_just_failed_fishing = true -- set the flag
+            end
+            
+            -- reset cooldown
+            fishing_cooldown = game_config.fishing_cooldown
+        end
+    end
+
+    ripples:update(dt, player_ship)
+    
     -- handle combat state
-    if gameState.combat.is_active then
+    if gamestate.get() == GameType.COMBAT then
         -- update zoom animation
         gameState.combat.zoom_progress = math.min(1, gameState.combat.zoom_progress + dt / gameState.combat.zoom_duration)
         local zoom_factor = 1 + (gameState.combat.target_zoom - 1) * gameState.combat.zoom_progress
@@ -1449,7 +1666,7 @@ function game.update(dt)
                     if gameState.combat.result_display_time <= 0 then
                         -- remove the enemy and end combat
                         spawnenemy.remove_enemy(gameState.combat.enemy)
-                        gameState.combat.is_active = false
+                        gamestate.set(GameType.VOYAGE)
                         gameState.combat.zoom_progress = 0
                         gameState.combat.is_fully_zoomed = false
                         gameState.combat.result = nil
@@ -1486,7 +1703,8 @@ function game.update(dt)
                             end
                             
                             reset_game()
-                            return "menu"
+                            gamestate.set(GameType.MENU)
+                            return GameType.MENU
                         end
                     end
                 end
@@ -1495,7 +1713,7 @@ function game.update(dt)
     end
     
     -- always update camera to follow ship or combat center
-    if gameState.combat.is_active then
+    if gamestate.get() == GameType.COMBAT then
         -- during combat, camera should focus on the center point between player and enemy
         local center_x = (player_ship.x + gameState.combat.enemy.x) / 2
         local center_y = (player_ship.y + gameState.combat.enemy.y) / 2
@@ -1616,7 +1834,7 @@ function game.draw()
         local glowIntensity = math.max(0, 1 - ambientLight) -- stronger glow at night
         
         -- draw enemy ships
-        if not gameState.combat.is_active then
+        if gamestate.get() ~= GameType.COMBAT then
             -- draw enemy glow effects first
             if glowIntensity > 0 then
                 local enemies = spawnenemy.get_enemies()
@@ -1753,7 +1971,7 @@ function game.draw()
         love.graphics.pop()
 
         -- draw combat result text at top of screen
-        if gameState.combat.is_active and gameState.combat.result then
+        if gamestate.get() == GameType.COMBAT and gameState.combat.result then
             -- draw combat result
             love.graphics.setColor(1, 1, 1, 1)
             local result_text
@@ -1853,7 +2071,7 @@ function game.draw()
         end
         
         -- draw catch texts normally in the game world (only when not in combat)
-        if not gameState.combat.is_active then
+        if gamestate.get() == GameType.VOYAGE then
             for _, catch in ipairs(catch_texts) do
                 local alpha = catch.time / game_config.fishing_cooldown  -- fade out over time
                 local font = love.graphics.getFont()
@@ -1919,8 +2137,8 @@ function game.draw()
     love.graphics.pop()
 
     -- draw shop ui on top of everything if not sleeping
-    if not player_ship.time_system.is_sleeping then
-        shop.draw_ui()
+    if gamestate.get():find("shop", 1, true) then
+        shop.draw_ui(gamestate)
     end
 
     -- draw day/night fade overlay
@@ -1939,6 +2157,13 @@ function game.draw()
                 size.CANVAS_HEIGHT / 2)
         end
     end
+    
+    -- draw fishing mini-game
+    if gamestate.get() == GameType.FISHING then
+        fishing_minigame.draw()
+    end
+
+    morningtext.draw()
 
     -- draw time of day
     love.graphics.setColor(1, 1, 1, 1)
@@ -2020,6 +2245,16 @@ function game.draw()
             
             print("Time set to 11:30 and Gold Sturgeon event triggered!")
         end
+
+        if suit.Button("Rainbows 0.1", suit.layout:row(150, 30)).hit then
+            player_ship.rainbows = math.max(
+                tonumber(player_ship.rainbows) or 0,
+                RAINBOWS_START_VALUE
+            )
+            serialize.save_data(game.get_saveable_data())
+            print(string.format("Rainbows set to %.1f", player_ship.rainbows))
+            force_corruption_sleep_if_needed()
+        end
         
         -- show debug status
         love.graphics.print("Debug Mode (F3 to toggle)", 10, 100)
@@ -2041,17 +2276,11 @@ function game.draw()
         end
     end
 
-
     
     -- draw white flash overlay for defeat
     if gameState.combat.defeat_flash and gameState.combat.defeat_flash.active then
         love.graphics.setColor(1, 1, 1, gameState.combat.defeat_flash.alpha)
         love.graphics.rectangle("fill", 0, 0, size.CANVAS_WIDTH, size.CANVAS_HEIGHT)
-    end
-    
-    -- draw fishing mini-game
-    if fishing_minigame.is_active() then
-        fishing_minigame.draw()
     end
     
     -- draw mobile controls

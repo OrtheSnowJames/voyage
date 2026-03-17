@@ -27,10 +27,14 @@ local spawn_timer = 0
 local function generate_enemy_size(player_y)
     -- base size increases with depth
     local depth_level = math.floor(math.abs(player_y) / 1000)
-    local base_size = math.max(1, depth_level)
-    
-    -- random variation around base size
-    return math.max(1, math.floor(base_size + math.random(-1, 2)))
+    -- use curved scaling so deep-water encounters become true "army" fights
+    -- this keeps early game manageable, then ramps hard at high depth.
+    local curved_base = (depth_level * 1.2) + ((depth_level ^ 1.75) * 0.45)
+    local base_size = math.max(1, math.floor(curved_base))
+
+    -- random variation grows with army size, but stays bounded
+    local variation = math.max(2, math.floor(base_size * 0.12))
+    return math.max(1, math.floor(base_size + math.random(-variation, variation)))
 end
 
 -- add helper function to check if a y position is too close to shops
