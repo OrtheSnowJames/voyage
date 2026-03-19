@@ -11,6 +11,7 @@ local SPAWN_MARGIN = 100  -- spawn enemies slightly outside view
 local SHORE_DIVISION = 60  -- match the shore_division from game.lua
 local MIN_SHORE_DISTANCE = 40  -- minimum distance from shore (match player ship restriction)
 local SHOP_SAFE_DISTANCE = 50  -- minimum distance from shops for enemy spawns
+local SHOP_LINE_NO_FOLLOW_DISTANCE = 10  -- much tighter than spawn safety zone
 
 -- excessive spawning configuration
 local EXCESSIVE_SPAWN_INTERVAL = 0.1  -- seconds between spawns in dangerous areas
@@ -22,6 +23,29 @@ local enemy_boat_sprite = love.graphics.newImage("assets/boat.png")
 
 local enemies = {}  -- table to store active enemies
 local spawn_timer = 0
+local corruption_level = 0
+local pull_radius = 0
+
+local function normalize_angle(angle)
+    while angle > math.pi do
+        angle = angle - 2 * math.pi
+    end
+    while angle < -math.pi do
+        angle = angle + 2 * math.pi
+    end
+    return angle
+end
+
+local function turn_towards(current, target, max_delta)
+    local delta = normalize_angle(target - current)
+    if math.abs(delta) <= max_delta then
+        return target
+    end
+    if delta > 0 then
+        return current + max_delta
+    end
+    return current - max_delta
+end
 
 -- generate a random enemy size (crew count)
 local function generate_enemy_size(player_y)
@@ -57,6 +81,12 @@ local function is_near_shop(y)
     end
     
     return false
+end
+
+-- shop divider lines are every 1000 units; used to disable attraction near line safety zones.
+local function is_near_shop_line(y)
+    local nearest_line = math.floor((y / 1000) + 0.5) * 1000
+    return math.abs(y - nearest_line) <= SHOP_LINE_NO_FOLLOW_DISTANCE
 end
 
 -- check if current area is dangerous (no port-a-shop nearby)
@@ -206,6 +236,8 @@ function spawnenemy.update(dt, camera, player_x, player_y)
                         x = spawn_x,
                         y = spawn_y,
                         direction = direction,
+                        heading = direction > 0 and 0 or math.pi,
+                        turn_rate = 1.2 + love.math.random() * 1.0,
                         size = generate_enemy_size(player_y),
                         radius = ENEMY_SIZE,
                         speed = enemy_speed,  -- store individual enemy speed
@@ -239,9 +271,35 @@ function spawnenemy.update(dt, camera, player_x, player_y)
     -- update enemy positions and remove off-screen enemies
     for i = #enemies, 1, -1 do
         local enemy = enemies[i]
-        
-        -- move enemy using its individual speed
-        enemy.x = enemy.x + (enemy.speed * enemy.direction * dt)
+
+        local default_heading = enemy.direction > 0 and 0 or math.pi
+        local desired_heading = default_heading
+
+        local player_on_shop_line = is_near_shop_line(player_y)
+        local enemy_in_spawn_blocked_area = is_near_shop(enemy.y)
+        local can_follow_player =
+            corruption_level >= 0.1 and
+            pull_radius > 0 and
+            not player_on_shop_line and
+            not enemy_in_spawn_blocked_area
+        if can_follow_player then
+            local dx = player_x - enemy.x
+            local dy = player_y - enemy.y
+            local distance_to_player = math.sqrt(dx * dx + dy * dy)
+
+            if distance_to_player <= pull_radius then
+                desired_heading = math.atan2(dy, dx)
+            end
+        end
+
+        if player_on_shop_line then
+            enemy.heading = default_heading
+        else
+            enemy.heading = turn_towards(enemy.heading or default_heading, desired_heading, (enemy.turn_rate or 1.5) * dt)
+        end
+        enemy.direction = math.cos(enemy.heading) >= 0 and 1 or -1
+        enemy.x = enemy.x + math.cos(enemy.heading) * enemy.speed * dt
+        enemy.y = enemy.y + math.sin(enemy.heading) * enemy.speed * dt
         
         -- check if enemy is far off screen
         if enemy.x < camera.x - DESPAWN_MARGIN or enemy.x > camera.x + view_width + DESPAWN_MARGIN then
@@ -257,7 +315,8 @@ function spawnenemy.draw()
         
         -- move to enemy position and rotate based on direction
         love.graphics.translate(enemy.x, enemy.y)
-        love.graphics.rotate((enemy.direction > 0 and 0 or math.pi) + math.pi)  -- rotate based on direction + 180° for boat sprite
+        local heading = enemy.heading or (enemy.direction > 0 and 0 or math.pi)
+        love.graphics.rotate(heading + math.pi)  -- sprite points opposite forward axis by default
         
         -- draw enemy boat sprite with red tint
         love.graphics.setColor(1, 0, 0, 1)  -- red color filter
@@ -339,6 +398,11 @@ end
 function spawnenemy.clear_enemies()
     enemies = {}
     spawn_timer = ENEMY_SPAWN_INTERVAL
+end
+
+function spawnenemy.set_corruption_state(level, radius)
+    corruption_level = math.max(0, tonumber(level) or 0)
+    pull_radius = math.max(0, tonumber(radius) or 0)
 end
 
 return spawnenemy

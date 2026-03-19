@@ -68,6 +68,8 @@ local special_fish = {
     "Gold Sturgeon" -- ultra rare fish only available after 11:30 with 1% chance
 }
 
+local corruption_level = 0
+
 local rods = {
     "Basic Rod",
     "Good Rod",
@@ -140,9 +142,18 @@ function fishing.is_special_fish(fish_name)
     return false
 end
 
+function fishing.set_corruption_level(level)
+    corruption_level = math.max(0, tonumber(level) or 0)
+end
+
 -- get available fish based on y position and time of day
 -- each 1000 units deeper unlocks better fish with a sliding window
 function fishing.get_fish_avalible(x, y, game_time)
+    if corruption_level >= 0.3 then
+        print("The water remembers..")
+        return {"Brown Trout"}
+    end
+
     -- round to nearest 1000
     local depth_level = math.floor(math.abs(y) / 1000)
     if depth_level < 1 then depth_level = 1 end -- minimum depth level is 1
@@ -261,7 +272,7 @@ function fishing.get_fish_value(fish_name)
         end
     end
     
-    return 1  -- return 1 if fish not found (shouldn't happen)
+    return 1  -- return 1 if fish not found (auldn't happen)
 end
 
 -- debug function to show available fish at a depth

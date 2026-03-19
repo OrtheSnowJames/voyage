@@ -203,6 +203,10 @@ function menu.update(dt)
         
         if suit.Button("Wipe Save", suit.layout:row(button_width, button_height)).hit then
             love.filesystem.remove("save.lua")
+            local game_module = require("game")
+            if game_module and game_module.reset_state then
+                game_module.reset_state()
+            end
             state.name_submitted = false
             state.ship_name.text = ""
             state.show_error = false

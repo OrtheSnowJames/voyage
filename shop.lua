@@ -37,6 +37,28 @@ local sprite_frame_height = 32
 local animation_frame_time = 0.5 -- 500ms per frame
 local total_frames = 2
 
+-- economy tuning (rebalanced for smoother early progression)
+local ECON = {
+    shop_base = 80,
+    shop_growth = 1.65,
+
+    -- continuous crew cost curve: starts cheap and ramps smoothly per hire
+    crew_start_cost = 8,
+    crew_growth = 1.6,
+
+    sword_base = 22,
+    sword_growth = 1.7,
+
+    rod_base = 24,
+    rod_growth = 1.75,
+
+    speed_base = 20,
+    speed_growth = 1.65,
+
+    cooldown_base = 35,
+    cooldown_growth = 1.75,
+}
+
 -- animation state for each shop
 local function create_shop_animation(target_y)
     return {
@@ -53,10 +75,8 @@ end
 
 -- calculate cost for next port-a-shop
 local function get_next_shop_cost()
-    local base_cost = 100
     local num_shops = #port_a_shops
-    -- gentler exponential scaling: base_cost * (1.5^num_shops)
-    return math.floor(base_cost * (1.5 ^ num_shops))
+    return math.floor(ECON.shop_base * (ECON.shop_growth ^ num_shops))
 end
 
 -- add a new port-a-shop
@@ -75,36 +95,27 @@ end
 
 -- calculate cost for hiring crew
 local function get_crew_hire_cost(current_crew)
-    if current_crew < 5 then
-        return 25  -- first 5 crew members cost 25 coins each
-    else
-        -- start exponential scaling at 50 coins after 5 crew members
-        -- using 1.5 as the base for exponential growth
-        local excess_crew = current_crew - 4  -- how many crew over the initial 5
-        return math.floor(50 * (1.5 ^ excess_crew))
-    end
+    local crew_count = math.max(1, tonumber(current_crew) or 1)
+    return math.floor(ECON.crew_start_cost * (ECON.crew_growth ^ (crew_count - 1)))
 end
 
 -- calculate cost for sword upgrade
 local function get_sword_upgrade_cost(current_sword)
     local current_level = combat.get_sword_level(current_sword)
-    -- start exponential immediately with base cost of 25
-    return math.floor(25 * (1.5 ^ (current_level - 1)))
+    return math.floor(ECON.sword_base * (ECON.sword_growth ^ (current_level - 1)))
 end
 
 -- calculate cost for rod upgrade
 local function get_rod_upgrade_cost(current_rod)
     local current_level = fishing.get_rod_level(current_rod)
-    -- start exponential immediately with base cost of 25
-    return math.floor(25 * (1.5 ^ (current_level - 1)))
+    return math.floor(ECON.rod_base * (ECON.rod_growth ^ (current_level - 1)))
 end
 
 -- calculate cost for speed upgrade
 local function get_speed_upgrade_cost(current_speed)
     -- start with base speed of 200, each upgrade adds 20
     local upgrade_level = math.floor((current_speed - 200) / 20) + 1
-    -- start exponential immediately with base cost of 25
-    return math.floor(25 * (1.5 ^ (upgrade_level - 1)))
+    return math.floor(ECON.speed_base * (ECON.speed_growth ^ (upgrade_level - 1)))
 end
 
 -- calculate cost for fishing cooldown upgrade
@@ -113,8 +124,7 @@ local function get_cooldown_upgrade_cost(current_cooldown)
     -- calculate level based on how much it's been reduced from base (5 seconds)
     local base_cooldown = 5.0
     local upgrade_level = math.floor((base_cooldown - current_cooldown) * 10) + 1
-    -- start exponential immediately with base cost of 20
-    return math.floor(20 * (1.5 ^ (upgrade_level - 1)))
+    return math.floor(ECON.cooldown_base * (ECON.cooldown_growth ^ (upgrade_level - 1)))
 end
 
 -- filter fish based on search text
