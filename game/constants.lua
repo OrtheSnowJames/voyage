@@ -60,7 +60,10 @@ local constants = {
     },
     cheat = {
         depth_tolerance = 10,
-        time_skip_threshold_seconds = 20
+        time_skip_threshold_seconds = 20,
+        money_base_threshold = 3000,
+        money_growth_per_depth = 1.75,
+        money_per_crew_bonus = 500
     },
     corruption = {
         start_value = 0.1,

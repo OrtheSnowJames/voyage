@@ -3,7 +3,6 @@
 local game = {}
 local suit = require "SUIT"
 local fishing = require("game.fishing")
-local fishing_minigame = require("game.fishing_minigame")
 local serialize = require("game.serialize")
 local combat = require("game.combat")
 local shop = require("shop")
@@ -20,10 +19,11 @@ local movement_steps = require("game.movement_steps")
 local mobile_controls_steps = require("game.mobile_controls_steps")
 local update_steps = require("game.update_steps")
 local draw_steps = require("game.draw_steps")
-local fishing_runtime = require("game.fishing_runtime")
 local shopkeeper_factory = require("game.shopkeeper")
 local constants = require("game.constants")
 local state_factory = require("game.state")
+local mods = require("game.mods")
+local fishing_minigame = fishing.minigame
 
 local boot_state = state_factory.create(love.graphics.newImage("assets/boat.png"))
 local state = {
@@ -82,6 +82,10 @@ state.ui = {
     morningtext = morningtext
 }
 state.actions = {}
+state.mods = {
+    module = mods,
+    active = false
+}
 
 -- derived settings (automatically update when config changes)
 local function get_max_catch_texts()
@@ -300,7 +304,7 @@ end
 function player_ship:update(dt)
     movement_steps.update_player_ship(self, dt, {
         mobile_controls = mobile_controls,
-        normalize_rainbows = normalize_rainbows,
+        normalize_rainbows = game.normalize_rainbows,
         shore_division = shore_division,
         last_player_ripple_pos = last_player_ripple_pos,
         ship_ripples = ship_ripples,
@@ -324,6 +328,9 @@ local GOLD_STURGEON_UNLOCK_HOUR = constants.fish.gold_sturgeon_unlock_hour
 local REGULAR_FISH_COUNT = constants.fish.regular_fish_count
 local CHEAT_DEPTH_TOLERANCE = constants.cheat.depth_tolerance
 local TIME_SKIP_CHEAT_THRESHOLD_SECONDS = constants.cheat.time_skip_threshold_seconds
+local MONEY_BASE_THRESHOLD = constants.cheat.money_base_threshold
+local MONEY_GROWTH_PER_DEPTH = constants.cheat.money_growth_per_depth
+local MONEY_PER_CREW_BONUS = constants.cheat.money_per_crew_bonus
 local RAINBOWS_START_VALUE = constants.corruption.start_value
 local RAINBOWS_STEP = constants.corruption.step
 
@@ -346,6 +353,7 @@ normalize_rainbows = function(value)
     local clamped = math.max(0, math.min(1, numeric))
     return math.floor(clamped * 10 + 0.5) / 10
 end
+game.normalize_rainbows = normalize_rainbows
 
 local function get_time_of_day_hours()
     return (player_ship.time_system.time / player_ship.time_system.DAY_LENGTH) * 12
@@ -367,7 +375,7 @@ local function has_fish(fish_name)
     return special_fish_event.active and special_fish_event.fish_name == fish_name
 end
 
-local function get_required_depth_for_fish(fish_name)
+function game.get_required_depth_for_fish(fish_name)
     local fish_value = fishing.get_fish_value(fish_name)
     if fish_value == 100000 then
         return nil -- Gold Sturgeon is handled by the time rule below.
@@ -379,6 +387,14 @@ local function get_required_depth_for_fish(fish_name)
 
     local night_fish_index = fish_value - REGULAR_FISH_COUNT
     return math.max(1, night_fish_index - 1)
+end
+
+local function get_max_reasonable_coins(shop_depth_level, crew_count)
+    local depth = math.max(1, tonumber(shop_depth_level) or 1)
+    local crew = math.max(1, tonumber(crew_count) or 1)
+    local depth_cap = MONEY_BASE_THRESHOLD * (MONEY_GROWTH_PER_DEPTH ^ (depth - 1))
+    local crew_bonus = (crew - 1) * MONEY_PER_CREW_BONUS
+    return depth_cap + crew_bonus
 end
 
 local function force_corruption_sleep_if_needed()
@@ -414,7 +430,7 @@ local function flag_save_as_rainbows(reason)
     end
 
     player_ship.rainbows = RAINBOWS_START_VALUE
-    -- print(string.format("Cheat detector flagged save: %s (rainbows=%.1f)", reason, player_ship.rainbows)) 
+    print(string.format("Cheat detector flagged save: %s (rainbows=%.1f)", reason, player_ship.rainbows)) 
     print("lollipops and rainbows headed your way!")
     serialize.save_data(game.get_saveable_data())
     force_corruption_sleep_if_needed()
@@ -475,6 +491,19 @@ local function detect_cheating()
     local last_shop_y = shop.get_last_port_a_shop_y() or 0
     local shop_depth_level = math.max(1, math.floor(last_shop_y / 1000))
     local max_expected_depth = shop_depth_level + CHEAT_DEPTH_TOLERANCE
+    local current_coins = tonumber(shop.get_coins()) or 0
+    local max_reasonable_coins = get_max_reasonable_coins(shop_depth_level, player_ship.men)
+
+    if current_coins > max_reasonable_coins then
+        local reason = string.format(
+            "coins %.1f exceed reasonable cap %.1f at depth level %d",
+            current_coins,
+            max_reasonable_coins,
+            shop_depth_level
+        )
+        flag_save_as_rainbows(reason)
+        return true
+    end
 
     local fish_lists = {
         player_ship.caught_fish or {},
@@ -483,7 +512,7 @@ local function detect_cheating()
 
     for _, fish_list in ipairs(fish_lists) do
         for _, fish_name in ipairs(fish_list) do
-            local required_depth = get_required_depth_for_fish(fish_name)
+            local required_depth = game.get_required_depth_for_fish(fish_name)
             if required_depth and required_depth > max_expected_depth then
                 local reason = string.format(
                     "%s requires depth %d, shop progression suggests <= %d",
@@ -523,7 +552,19 @@ function game.load()
 
     mobile_controls.enabled = on_mobile
 
-    local saved_data = serialize.load_data()
+    mods.load_all(state)
+    state.mods.active = mods.has_loaded_mods()
+    if state.mods.active then
+        print(string.format("Loaded %d mod(s)", mods.count()))
+    end
+
+    local saved_data = serialize.load_data({
+        allow_tampered = true
+    })
+    if serialize.was_tampered() then
+        print("Tampered save.lua detected: loading anyway.")
+    end
+
     if saved_data then
         -- only copy saved data properties, preserving methods
         for k, v in pairs(saved_data) do
@@ -547,7 +588,7 @@ function game.load()
     if player_ship.rainbows == true then
         player_ship.rainbows = RAINBOWS_START_VALUE
     else
-        player_ship.rainbows = normalize_rainbows(player_ship.rainbows)
+        player_ship.rainbows = game.normalize_rainbows(player_ship.rainbows)
     end
 
     if player_ship.corruption_started == nil then
@@ -575,6 +616,7 @@ function game.load()
     spawnenemy.set_corruption_state(player_ship.rainbows, get_enemy_pull_radius())
     detect_cheating()
     morningtext.start(player_ship.rainbows)
+    mods.run_hook("on_game_load", state)
 end
 
 -- ship animation
@@ -625,7 +667,7 @@ end
 -- make getCurrentWaterColor accessible to other modules
 game.getCurrentWaterColor = getCurrentWaterColor
 
-state.fishing.runtime = fishing_runtime.create({
+state.fishing.runtime = fishing.create_runtime({
     GameType = GameType,
     fishing = fishing,
     fishing_minigame = fishing_minigame,
@@ -758,6 +800,7 @@ function game.update(dt)
 
     update_steps.camera_follow(state)
     update_steps.special_fish_event(dt, state)
+    mods.run_hook("on_update", dt, state)
 
     return nil
 end
@@ -769,6 +812,7 @@ function game.draw()
     draw_steps.draw_time_and_debug(state)
     draw_steps.draw_final_ui(state)
     draw_steps.draw_special_event_overlay(state)
+    mods.run_hook("on_draw", state)
 end
 
 -- make player_ship accessible to other modules

@@ -1,4 +1,13 @@
 local serialize = {}
+local save_tampered = false
+
+local function save_hash(str)
+    local hash = 5381
+    for i = 1, #str do
+        hash = (hash * 33 + str:byte(i)) % 4294967296
+    end
+    return string.format("%08x", hash)
+end
 
 --[[
   From github.com
@@ -109,15 +118,36 @@ end
 function serialize.save_data(data)
     local serialized = do_serialize(data)
     love.filesystem.write("save.lua", serialized)
+    love.filesystem.write("save.sig", save_hash(serialized))
     print("saved")
 end
 
-function serialize.load_data()
+function serialize.load_data(options)
+    options = options or {}
+    local allow_tampered = options.allow_tampered == true
     local content = love.filesystem.read("save.lua")
     if content then
+        local expected_sig = love.filesystem.read("save.sig")
+        local actual_sig = save_hash(content)
+        if expected_sig == nil then
+            -- migration path: trust old saves once and create a signature.
+            love.filesystem.write("save.sig", actual_sig)
+            save_tampered = false
+        else
+            save_tampered = expected_sig ~= actual_sig
+        end
+
+        if save_tampered and not allow_tampered then
+            return nil
+        end
         return do_deserialize(content)
     end
+    save_tampered = false
     return nil
+end
+
+function serialize.was_tampered()
+    return save_tampered
 end
 
 return serialize
