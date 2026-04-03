@@ -40,7 +40,7 @@ local total_frames = 2
 
 -- economy tuning (rebalanced for smoother early progression)
 local ECON = {
-    shop_base = 80,
+    shop_base = 55,
     shop_growth = 1.65,
 
     -- continuous crew cost curve: starts cheap and ramps smoothly per hire
