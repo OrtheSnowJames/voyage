@@ -438,11 +438,13 @@ function draw_steps.draw_time_and_debug(state)
     local time_of_day = (player_ship.time_system.time / player_ship.time_system.DAY_LENGTH) * 12
     local hours = math.floor(time_of_day)
     local minutes = math.floor((time_of_day - hours) * 60)
+    local fishing_level = state.constants.fishing_level
     if hours >= 12 then
         hours = 12
         minutes = 0
     end
     love.graphics.print(string.format("Time: %02d:%02d", hours, minutes), 10, 10)
+    love.graphics.print(string.format("Fishing Level: %d", player_ship.y / fishing_level), 10, 30)
 
     if debugOptions.showDebugButtons and not player_ship.time_system.is_sleeping then
         suit.layout:reset(10, 40)

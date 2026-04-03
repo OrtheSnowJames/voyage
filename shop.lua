@@ -4,6 +4,7 @@ local fishing = require("game.fishing")
 local combat = require("game.combat")  -- add combat module
 local size = require("game.size")
 local GameType = require("game.gametypes")
+local constants = require("game.constants")
 
 -- player's inventory (should be moved to a proper inventory system later)
 local coins = 0
@@ -22,7 +23,7 @@ local inventory_state = {
 }
 
 -- port-a-shop configuration
-local SHOP_SPACING = 1000  -- distance between shops (changed from 40)
+local SHOP_SPACING = constants.fishing_level  -- distance between shops/levels
 local SHOP_SIZE = { width = 60, height = 40 }  -- size of the shop platform
 local INTERACTION_RANGE = 50  -- how close the player needs to be to interact
 local SHOP_ANIMATION_SPEED = 500  -- speed of shop movement in pixels per second
@@ -62,7 +63,7 @@ local ECON = {
 -- animation state for each shop
 local function create_shop_animation(target_y)
     return {
-        start_y = target_y + 1000,  -- start 1000 pixels below target
+        start_y = target_y + SHOP_SPACING,  -- start one level below target
         target_y = target_y,
         progress = 0,  -- 0 to 1
         duration = 2,  -- animation duration in seconds
@@ -82,10 +83,10 @@ end
 -- add a new port-a-shop
 local function add_port_a_shop()
     local shop_number = #port_a_shops + 1
-    local target_y = shop_number * SHOP_SPACING  -- y position based on shop number (1000, 2000, etc.)
+    local target_y = shop_number * SHOP_SPACING  -- y position based on shop number
     table.insert(port_a_shops, {
         x = 0,  -- will be set during update
-        y = target_y + 1000,  -- start below target position
+        y = target_y + SHOP_SPACING,  -- start below target position
         is_spawned = false,
         is_active = false,  -- whether player is in range to interact
         animation = create_shop_animation(target_y)
@@ -627,20 +628,20 @@ function shop.draw_shops(camera)
     -- save current graphics state
     love.graphics.push()
     
-    -- draw horizontal divider lines every 1000 units
+    -- draw horizontal divider lines at each fishing level
     -- get viewport boundaries
     local viewWidth = size.CANVAS_WIDTH / camera.scale
     local viewHeight = love.graphics.getHeight() / camera.scale
     local shoreExtension = 1000 -- match the shore extension from game.lua
     
     -- calculate visible range
-    local startY = math.floor((camera.y - viewHeight) / 1000) * 1000
-    local endY = math.ceil((camera.y + viewHeight * 2) / 1000) * 1000
+    local startY = math.floor((camera.y - viewHeight) / SHOP_SPACING) * SHOP_SPACING
+    local endY = math.ceil((camera.y + viewHeight * 2) / SHOP_SPACING) * SHOP_SPACING
     
     -- draw divider lines
     love.graphics.setColor(0.3, 0.3, 0.5, 0.3) -- similar to shore line but more transparent
     love.graphics.setLineWidth(2)
-    for y = startY, endY, 1000 do
+    for y = startY, endY, SHOP_SPACING do
         love.graphics.line(
             camera.x - shoreExtension, y,
             camera.x + viewWidth + shoreExtension, y

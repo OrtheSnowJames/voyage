@@ -23,6 +23,7 @@ local shopkeeper_factory = require("game.shopkeeper")
 local constants = require("game.constants")
 local state_factory = require("game.state")
 local mods = require("game.mods")
+local FISHING_LEVEL = constants.fishing_level
 local fishing_minigame = fishing.minigame
 
 local boot_state = state_factory.create(love.graphics.newImage("assets/boat.png"))
@@ -181,7 +182,7 @@ local function update_shore_objects()
 end
 
 -- port-a-shop configuration
-local SHOP_SPACING = constants.shops.spacing  -- distance between shops
+local SHOP_SPACING = FISHING_LEVEL  -- distance between shops
 local SHOP_LINE_NO_FISH_DISTANCE = constants.shops.no_fish_line_distance
 
 -- port-a-shops state
@@ -489,7 +490,7 @@ local function detect_cheating()
     end
 
     local last_shop_y = shop.get_last_port_a_shop_y() or 0
-    local shop_depth_level = math.max(1, math.floor(last_shop_y / 1000))
+    local shop_depth_level = math.max(1, math.floor(last_shop_y / FISHING_LEVEL))
     local max_expected_depth = shop_depth_level + CHEAT_DEPTH_TOLERANCE
     local current_coins = tonumber(shop.get_coins()) or 0
     local max_reasonable_coins = get_max_reasonable_coins(shop_depth_level, player_ship.men)

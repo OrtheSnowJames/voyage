@@ -1,4 +1,6 @@
 local combat = {}
+local constants = require("game.constants")
+local FISHING_LEVEL = constants.fishing_level
 
 local swords = {
     "Basic Sword",
@@ -55,7 +57,7 @@ function combat.combat(crew_size, enemy_size, sword_level, top_sword_level, play
     -- apply depth penalty to sword level
     local original_sword_level = sword_level
     if player_y then
-        local depth_level = math.floor(math.abs(player_y) / 1000)
+        local depth_level = math.floor(math.abs(player_y) / FISHING_LEVEL)
         if depth_level > 0 then
             -- calculate how much the sword is "debuffed" at this depth
             -- the deeper you go, the more the sword is weakened

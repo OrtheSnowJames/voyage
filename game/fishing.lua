@@ -1,5 +1,7 @@
 local fishing = {}
 local size = require("game.size")
+local constants = require("game.constants")
+local FISHING_LEVEL = constants.fishing_level
 
 local fish = {
     "Bluegill", "Crappie", "Yellow Perch", "Redfin Pickerel", "Bullhead Catfish",
@@ -79,7 +81,7 @@ local function update_catch_text_offsets(catch_texts, spacing)
 end
 
 local function standardize_depth(y)
-    local depth_level = math.floor(math.abs(y) / 1000)
+    local depth_level = math.floor(math.abs(y) / FISHING_LEVEL)
     if depth_level < 1 then
         depth_level = 1
     end

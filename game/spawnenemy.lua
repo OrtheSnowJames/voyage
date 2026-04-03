@@ -1,14 +1,16 @@
 local spawnenemy = {}
 local size = require("game.size")
+local constants = require("game.constants")
+local FISHING_LEVEL = constants.fishing_level
 
 -- configuration
 local ENEMY_SPAWN_INTERVAL = 10  -- seconds between enemy spawns
 local BASE_ENEMY_SPEED = 150  -- base speed in pixels per second
-local SPEED_INCREASE_PER_LEVEL = 30  -- speed increase per 1000 units of depth
+local SPEED_INCREASE_PER_LEVEL = 30  -- speed increase per level of depth
 local MAX_SPEED_MULTIPLIER = 3  -- maximum speed multiplier (prevents excessive speeds)
 local ENEMY_SIZE = 20   -- size of enemy ships
 local SPAWN_MARGIN = 100  -- spawn enemies slightly outside view
-local SHORE_DIVISION = 60  -- match the shore_division from game.lua
+local SHORE_DIVISION = constants.world.shore_division
 local MIN_SHORE_DISTANCE = 40  -- minimum distance from shore (match player ship restriction)
 local SHOP_SAFE_DISTANCE = 50  -- minimum distance from shops for enemy spawns
 local SHOP_LINE_NO_FOLLOW_DISTANCE = 10  -- much tighter than spawn safety zone
@@ -50,7 +52,7 @@ end
 -- generate a random enemy size (crew count)
 local function generate_enemy_size(player_y)
     -- base size increases with depth
-    local depth_level = math.floor(math.abs(player_y) / 1000)
+    local depth_level = math.floor(math.abs(player_y) / FISHING_LEVEL)
     -- use curved scaling so deep-water encounters become true "army" fights
     -- this keeps early game manageable, then ramps hard at high depth.
     local curved_base = (depth_level * 1.2) + ((depth_level ^ 1.75) * 0.45)
@@ -68,31 +70,31 @@ local function is_near_shop(y)
         return true
     end
     
-    -- check port-a-shop positions (every 1000 units)
-    local shop_y = math.floor(y / 1000) * 1000
+    -- check port-a-shop positions (every fishing level)
+    local shop_y = math.floor(y / FISHING_LEVEL) * FISHING_LEVEL
     if math.abs(y - shop_y) <= SHOP_SAFE_DISTANCE then
         return true
     end
     
     -- also check the next shop level up and down
-    if math.abs(y - (shop_y + 1000)) <= SHOP_SAFE_DISTANCE or
-       math.abs(y - (shop_y - 1000)) <= SHOP_SAFE_DISTANCE then
+    if math.abs(y - (shop_y + FISHING_LEVEL)) <= SHOP_SAFE_DISTANCE or
+       math.abs(y - (shop_y - FISHING_LEVEL)) <= SHOP_SAFE_DISTANCE then
         return true
     end
     
     return false
 end
 
--- shop divider lines are every 1000 units; used to disable attraction near line safety zones.
+-- shop divider lines are every fishing level; used to disable attraction near line safety zones.
 local function is_near_shop_line(y)
-    local nearest_line = math.floor((y / 1000) + 0.5) * 1000
+    local nearest_line = math.floor((y / FISHING_LEVEL) + 0.5) * FISHING_LEVEL
     return math.abs(y - nearest_line) <= SHOP_LINE_NO_FOLLOW_DISTANCE
 end
 
 -- check if current area is dangerous (no port-a-shop nearby)
 local function is_dangerous_area(y)
-    -- areas less than 1000 units from shore are always safe
-    if math.abs(y) < 1000 then
+    -- areas less than one fishing level from shore are always safe
+    if math.abs(y) < FISHING_LEVEL then
         return false
     end
     
@@ -109,7 +111,7 @@ end
 
 -- add helper function to calculate enemy speed based on depth
 local function calculate_enemy_speed(y_position, is_dangerous_area)
-    local depth_level = math.floor(math.abs(y_position) / 1000)
+    local depth_level = math.floor(math.abs(y_position) / FISHING_LEVEL)
     local speed_multiplier = 1 + (depth_level * SPEED_INCREASE_PER_LEVEL / BASE_ENEMY_SPEED)
     -- cap the multiplier to prevent excessive speeds
     speed_multiplier = math.min(speed_multiplier, MAX_SPEED_MULTIPLIER)
@@ -176,14 +178,14 @@ function spawnenemy.update(dt, camera, player_x, player_y)
                                 if is_dangerous then
                     print("DEBUG: dangerous area spawning - checking both lines and random positions")
                     
-                    -- First, try to spawn on 1000-unit divider lines
-                    local start_y = math.floor(min_y / 1000) * 1000
-                    local end_y = math.ceil(max_y / 1000) * 1000
+                    -- First, try to spawn on fishing-level divider lines
+                    local start_y = math.floor(min_y / FISHING_LEVEL) * FISHING_LEVEL
+                    local end_y = math.ceil(max_y / FISHING_LEVEL) * FISHING_LEVEL
                     
                     print("DEBUG: Divider line search - start: " .. start_y .. ", end: " .. end_y)
                     
                     local valid_lines = {}
-                    for line_y = start_y, end_y, 1000 do
+                    for line_y = start_y, end_y, FISHING_LEVEL do
                         if line_y >= min_y and line_y <= max_y and not is_near_shop(line_y) then
                             table.insert(valid_lines, line_y)
                             print("DEBUG: Found valid line at Y=" .. line_y)

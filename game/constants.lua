@@ -1,4 +1,7 @@
+local fishing_level = 1000 -- the big number that separates the fishing levels
+
 local constants = {
+    fishing_level = fishing_level,
     config = {
         fishing_cooldown = 5,
         catch_text_spacing = 20
@@ -49,7 +52,7 @@ local constants = {
         min_visible = 5
     },
     shops = {
-        spacing = 1000,
+        spacing = fishing_level,
         size = { width = 60, height = 40 },
         interaction_range = 50,
         no_fish_line_distance = 50
