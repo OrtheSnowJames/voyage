@@ -1,3 +1,4 @@
 lab
 .mypy_cache
 .vscode
+mods/mod_log.txt
