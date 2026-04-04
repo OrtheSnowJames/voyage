@@ -1,11 +1,10 @@
 local hunger = {}
+local alert = require("game.alert")
 
 local function sync_hunger_levels(player_ship, hunger_config)
     local crew_count = math.max(0, math.floor(tonumber(player_ship.men) or 0))
     player_ship.men = crew_count
     player_ship.hunger_levels = player_ship.hunger_levels or {}
-    player_ship.hunger_alert_text = player_ship.hunger_alert_text or ""
-    player_ship.hunger_alert_timer = math.max(0, tonumber(player_ship.hunger_alert_timer) or 0)
 
     while #player_ship.hunger_levels < crew_count do
         table.insert(player_ship.hunger_levels, hunger_config.start)
@@ -21,9 +20,8 @@ local function sync_hunger_levels(player_ship, hunger_config)
     end
 end
 
-local function set_hunger_alert(player_ship, hunger_config, text)
-    player_ship.hunger_alert_text = text
-    player_ship.hunger_alert_timer = hunger_config.alert_duration
+local function set_hunger_alert(hunger_config, text)
+    alert.show(text, hunger_config.alert_duration, {1, 0.3, 0.3, 1})
     print(text)
 end
 
@@ -204,36 +202,41 @@ function hunger.reset(player_ship, hunger_config)
     for i = 1, crew_count do
         player_ship.hunger_levels[i] = hunger_config.start
     end
-    player_ship.hunger_alert_text = ""
-    player_ship.hunger_alert_timer = 0
 end
 
-function hunger.handle_feed_button(state)
+function hunger.handle_feed_button(state, options)
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
     if gamestate.get() ~= GameType.VOYAGE then
         return
     end
 
+    options = options or {}
     local suit = state.ui.suit
     local size = state.system.size
     local player_ship = state.player
     local hunger_config = state.constants.hunger
 
-    if not suit.Button("Feed", {id = "feed_crew"}, 10, size.CANVAS_HEIGHT - 40, 80, 30).hit then
+    local button_x = options.x or 10
+    local button_y = options.y or (size.CANVAS_HEIGHT - 40)
+    local button_width = options.width or 80
+    local button_height = options.height or 30
+    local button_id = options.id or "feed_crew"
+
+    if not suit.Button("Feed", {id = button_id}, button_x, button_y, button_width, button_height).hit then
         return
     end
 
     sync_hunger_levels(player_ship, hunger_config)
 
     if player_ship.men <= 0 or #player_ship.hunger_levels == 0 then
-        set_hunger_alert(player_ship, hunger_config, "No crew left to feed.")
+        set_hunger_alert(hunger_config, "No crew left to feed.")
         return
     end
 
     local fish_name, fish_value = consume_best_fish(player_ship.caught_fish, state.fishing.module)
     if not fish_name then
-        set_hunger_alert(player_ship, hunger_config, "No fish to feed the crew.")
+        set_hunger_alert(hunger_config, "No fish to feed the crew.")
         return
     end
 
@@ -254,7 +257,7 @@ function hunger.handle_feed_button(state)
     end
 
     local message = string.format("Fed crew with %s (+%d hunger)", fish_name, feed_amount)
-    set_hunger_alert(player_ship, hunger_config, message)
+    set_hunger_alert(hunger_config, message)
     state.fishing.runtime.add_catch_text(message)
 end
 
@@ -265,13 +268,6 @@ function hunger.update(dt, state)
     local hunger_config = state.constants.hunger
 
     sync_hunger_levels(player_ship, hunger_config)
-
-    if player_ship.hunger_alert_timer > 0 then
-        player_ship.hunger_alert_timer = math.max(0, player_ship.hunger_alert_timer - dt)
-        if player_ship.hunger_alert_timer <= 0 then
-            player_ship.hunger_alert_text = ""
-        end
-    end
 
     if player_ship.men <= 0 then
         return nil
@@ -299,7 +295,7 @@ function hunger.update(dt, state)
         local message = deaths == 1
             and "A crew member starved to death!"
             or string.format("%d crew members starved to death!", deaths)
-        set_hunger_alert(player_ship, hunger_config, message)
+        set_hunger_alert(hunger_config, message)
         state.fishing.runtime.add_catch_text(message)
     end
 
@@ -343,14 +339,6 @@ function hunger.draw_hud(state)
         love.graphics.print("no mods", 10, 70)
     end
 
-    if player_ship.hunger_alert_timer > 0 and player_ship.hunger_alert_text ~= "" then
-        love.graphics.setColor(1, 0.3, 0.3, 1)
-        local alert = player_ship.hunger_alert_text
-        local font = love.graphics.getFont()
-        local text_width = font:getWidth(alert)
-        love.graphics.print(alert, (state.system.size.CANVAS_WIDTH - text_width) / 2, 10)
-        love.graphics.setColor(1, 1, 1, 1)
-    end
 end
 
 return hunger

@@ -79,7 +79,11 @@ end
 -- calculate cost for hiring crew
 local function get_crew_hire_cost(current_crew)
     local crew_count = math.max(1, tonumber(current_crew) or 1)
-    return math.floor(ECON.crew_start_cost * (ECON.crew_growth ^ (crew_count - 1)))
+    local upgrades = crew_count - 1
+    local cost = ECON.crew_start_cost
+        + (upgrades * ECON.crew_linear_cost)
+        + (upgrades * upgrades * ECON.crew_quadratic_cost)
+    return math.floor(cost)
 end
 
 -- calculate cost for sword upgrade
@@ -139,6 +143,40 @@ end
 
 function shop.get_coins()
     return coins
+end
+
+function shop.try_spend_coins(amount)
+    local cost = math.floor(tonumber(amount) or 0)
+    if cost <= 0 then
+        return true
+    end
+
+    if coins < cost then
+        return false
+    end
+
+    coins = coins - cost
+    return true
+end
+
+function shop.add_coins(amount)
+    local gain = math.floor(tonumber(amount) or 0)
+    if gain <= 0 then
+        return 0
+    end
+
+    coins = coins + gain
+    return gain
+end
+
+-- public helper so other modules can read crew hire price
+function shop.get_crew_hire_cost(current_crew)
+    return get_crew_hire_cost(current_crew)
+end
+
+function shop.get_current_crew_hire_cost(player_ship)
+    local crew_count = player_ship and player_ship.men or 1
+    return get_crew_hire_cost(crew_count)
 end
 
 -- check if player is in range of any shop

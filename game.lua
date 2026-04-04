@@ -24,6 +24,8 @@ local constants = require("game.constants")
 local state_factory = require("game.state")
 local mods = require("game.mods")
 local hunger = require("game.hunger")
+local crew_management = require("game.crew_management")
+local alert = require("game.alert")
 local FISHING_LEVEL = constants.fishing_level
 local fishing_minigame = fishing.minigame
 
@@ -81,7 +83,8 @@ state.ui = {
     debug = debugOptions,
     mobile = mobile_controls,
     suit = suit,
-    morningtext = morningtext
+    morningtext = morningtext,
+    alert = alert
 }
 state.actions = {}
 state.mods = {
@@ -784,6 +787,7 @@ end
 
 function game.update(dt)
     morningtext.update(dt)
+    alert.update(dt)
     force_corruption_sleep_if_needed()
     update_steps.day_night_cycle(dt, state)
     detect_cheating()
@@ -793,7 +797,7 @@ function game.update(dt)
         return GameType.MENU
     end
 
-    hunger.handle_feed_button(state)
+    crew_management.handle_buttons(state)
     local hunger_result = hunger.update(dt, state)
     if hunger_result then
         return hunger_result

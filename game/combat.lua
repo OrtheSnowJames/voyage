@@ -2,6 +2,7 @@ local combat = {}
 local constants = require("game.constants")
 local FISHING_LEVEL = constants.fishing_level
 local CARELESS_CREW_ADVANTAGE_MULTIPLIER = constants.combat.careless_crew_advantage_multiplier
+local FAINTED_RECOVERY_PENALTY_PER_ENEMY = constants.combat.fainted_recovery_penalty_per_enemy or 0.005
 
 local swords = {
     "Basic Sword",
@@ -123,9 +124,11 @@ function combat.combat(crew_size, enemy_size, sword_level, top_sword_level, play
     print("Best Roll: " .. best_roll)
     
     -- calculate fainted using equation: (their_men - 1) * random(0.7 to 1.0)
+    -- then lightly dampen recoverable crew for larger enemy ships.
     local base_fainted = enemy_size - 1
     local random_multiplier = 0.7 + (math.random() * 0.3)  -- 0.7 to 1.0
-    local fainted = math.floor(base_fainted * random_multiplier)
+    local large_enemy_penalty = 1 / (1 + (enemy_size - 1) * FAINTED_RECOVERY_PENALTY_PER_ENEMY)
+    local fainted = math.floor(base_fainted * random_multiplier * large_enemy_penalty)
     
     -- calculate actual casualties based on best_roll and crew advantage
     local base_casualties = math.ceil(enemy_size * best_roll)
@@ -147,6 +150,7 @@ function combat.combat(crew_size, enemy_size, sword_level, top_sword_level, play
     end
     
     print("Enemy Fainted: " .. fainted)
+    print("Large Enemy Recovery Penalty: " .. string.format("%.3f", large_enemy_penalty))
     print("Our Casualties (before sword reduction): " .. (actual_casualties + sword_reduction))
     print("Sword Reduction: " .. sword_reduction) 
     print("Final Casualties: " .. actual_casualties)

@@ -1,5 +1,6 @@
 local draw_steps = {}
 local hunger = require("game.hunger")
+local crew_management = require("game.crew_management")
 
 local function prepare_ripple_uniform_data(state)
     local ripple_x_data = {}
@@ -423,6 +424,7 @@ function draw_steps.draw_post_world_overlays(state)
         state.fishing.minigame.draw()
     end
 
+    crew_management.draw_overlay(state)
     state.ui.morningtext.draw()
 end
 
@@ -447,6 +449,7 @@ function draw_steps.draw_time_and_debug(state)
     love.graphics.print(string.format("Time: %02d:%02d", hours, minutes), 10, 10)
     love.graphics.print(string.format("Fishing Level: %d", player_ship.y / fishing_level), 10, 30)
     hunger.draw_hud(state)
+    state.ui.alert.draw(state.system.size)
 
     if debugOptions.showDebugButtons and not player_ship.time_system.is_sleeping then
         suit.layout:reset(10, 40)

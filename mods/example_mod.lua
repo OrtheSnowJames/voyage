@@ -21,6 +21,7 @@ return {
         -- Example behavior override:
         -- every fish is considered available at any depth.
         state.system.game.get_required_depth_for_fish = function(_fish_name)
+            print("get_required_depth_for_fish")
             return -1
         end
     end,

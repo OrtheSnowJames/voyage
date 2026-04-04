@@ -21,7 +21,8 @@ local constants = {
         result_display_time = 3.0,
         defeat_flash_duration = 3.0,
         defeat_text_display_time = 2.0,
-        careless_crew_advantage_multiplier = 3
+        careless_crew_advantage_multiplier = 3,
+        fainted_recovery_penalty_per_enemy = 0.005
     },
     ship = {
         start_x = 100,
@@ -62,15 +63,16 @@ local constants = {
             shop_growth = 1.65,
 
             crew_start_cost = 8,
-            crew_growth = 1.5,
-            
+            crew_linear_cost = 6,
+            crew_quadratic_cost = 0.6,
+
             sword_base = 11,
             sword_growth = 1.7,
         
             rod_base = 12,
             rod_growth = 1.75,
         
-            speed_base = 20,
+            speed_base = 15,
             speed_growth = 1.65,
         
             cooldown_base = 35,
