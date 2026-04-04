@@ -2,3 +2,4 @@ lab
 .mypy_cache
 .vscode
 mods/mod_log.txt
+scripts/econ_math_output.csv

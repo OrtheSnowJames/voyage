@@ -59,8 +59,9 @@ local constants = {
         interaction_range = 50,
         no_fish_line_distance = 50,
         ECON = {
-            shop_base = 55,
-            shop_growth = 1.65,
+            shop_base = 50,
+            shop_target_cycles_base = 4,
+            shop_target_cycles_step = 0.9,
 
             crew_start_cost = 8,
             crew_linear_cost = 6,
@@ -81,7 +82,10 @@ local constants = {
     },
     fish = {
         gold_sturgeon_unlock_hour = 11.5,
-        regular_fish_count = 30
+        regular_fish_count = 30,
+        value_offset = 2,
+        gold_sturgeon_value = 100000,
+        gold_sturgeon_sell_price = 60000
     },
     hunger = {
         max = 100,

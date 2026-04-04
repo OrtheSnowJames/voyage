@@ -41,6 +41,10 @@ local total_frames = 2
 
 -- economy constants
 local ECON = constants.shops.ECON
+local GOLD_STURGEON_SELL_PRICE = constants.fish.gold_sturgeon_sell_price or 60000
+local FISH_SELL_MULTIPLIER = 0.6
+local MAX_DEPTH_BAND = math.max(1, (constants.fish.regular_fish_count or 30) - 2)
+local CARELESS_CREW_ADVANTAGE_MULTIPLIER = constants.combat.careless_crew_advantage_multiplier or 3
 
 -- animation state for each shop
 local function create_shop_animation(target_y)
@@ -57,9 +61,25 @@ local function create_shop_animation(target_y)
 end
 
 -- calculate cost for next port-a-shop
+local function get_enemy_base_for_depth(depth_level)
+    local curved_base = (depth_level * 1.2) + ((depth_level ^ 1.75) * 0.45)
+    return math.max(1, math.floor(curved_base))
+end
+
+local function get_expected_income_per_cycle(depth_level)
+    local band = math.min(math.max(depth_level, 1), MAX_DEPTH_BAND)
+    local enemy_base = get_enemy_base_for_depth(depth_level)
+    local crew_cap = (CARELESS_CREW_ADVANTAGE_MULTIPLIER * enemy_base) - 1
+    local player_expected_value = band + 1
+    local crew_expected_value = band + 0.5
+    return FISH_SELL_MULTIPLIER * (player_expected_value + (crew_cap * crew_expected_value))
+end
+
 local function get_next_shop_cost()
-    local num_shops = #port_a_shops
-    return math.floor(ECON.shop_base * (ECON.shop_growth ^ num_shops))
+    local level = #port_a_shops + 1
+    local target_cycles = ECON.shop_target_cycles_base + (ECON.shop_target_cycles_step * (level - 1))
+    local expected_income = get_expected_income_per_cycle(level)
+    return math.floor(expected_income * target_cycles)
 end
 
 -- add a new port-a-shop
@@ -488,8 +508,12 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
         if #player_ship.caught_fish > 0 then
             local total = 0
             for _, fish in ipairs(player_ship.caught_fish) do
-                local fish_value = fishing.get_fish_value(fish)
-                total = total + (fish_value * 0.6)
+                if fish == "Gold Sturgeon" then
+                    total = total + GOLD_STURGEON_SELL_PRICE
+                else
+                    local fish_value = fishing.get_fish_value(fish)
+                    total = total + (fish_value * 0.6)
+                end
             end
             coins = coins + total
             player_ship.caught_fish = {}

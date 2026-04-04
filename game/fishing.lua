@@ -2,6 +2,8 @@ local fishing = {}
 local size = require("game.size")
 local constants = require("game.constants")
 local FISHING_LEVEL = constants.fishing_level
+local FISH_VALUE_OFFSET = constants.fish.value_offset or 0
+local GOLD_STURGEON_VALUE = constants.fish.gold_sturgeon_value or 100000
 
 local fish = {
     "Bluegill", "Crappie", "Yellow Perch", "Redfin Pickerel", "Bullhead Catfish",
@@ -242,22 +244,22 @@ end
 
 function fishing.get_fish_value(fish_name)
     if fish_name == "Gold Sturgeon" then
-        return 100000
+        return GOLD_STURGEON_VALUE
     end
 
     for i, f in ipairs(fish) do
         if f == fish_name then
-            return i
+            return i + FISH_VALUE_OFFSET
         end
     end
 
     for i, f in ipairs(rare_night_fish) do
         if f == fish_name then
-            return #fish + i
+            return #fish + i + FISH_VALUE_OFFSET
         end
     end
 
-    return 1
+    return 1 + FISH_VALUE_OFFSET
 end
 
 function fishing.debug_fish_at_depth(y, game_time)
