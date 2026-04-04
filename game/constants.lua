@@ -56,7 +56,26 @@ local constants = {
         spacing = fishing_level,
         size = { width = 60, height = 40 },
         interaction_range = 50,
-        no_fish_line_distance = 50
+        no_fish_line_distance = 50,
+        ECON = {
+            shop_base = 55,
+            shop_growth = 1.65,
+
+            crew_start_cost = 8,
+            crew_growth = 1.5,
+            
+            sword_base = 11,
+            sword_growth = 1.7,
+        
+            rod_base = 12,
+            rod_growth = 1.75,
+        
+            speed_base = 20,
+            speed_growth = 1.65,
+        
+            cooldown_base = 35,
+            cooldown_growth = 1.75,
+        }
     },
     fish = {
         gold_sturgeon_unlock_hour = 11.5,

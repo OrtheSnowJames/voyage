@@ -39,27 +39,8 @@ local sprite_frame_height = 32
 local animation_frame_time = 0.5 -- 500ms per frame
 local total_frames = 2
 
--- economy tuning (rebalanced for smoother early progression)
-local ECON = {
-    shop_base = 55,
-    shop_growth = 1.65,
-
-    -- continuous crew cost curve: starts cheap and ramps smoothly per hire
-    crew_start_cost = 8,
-    crew_growth = 1.5,
-
-    sword_base = 11,
-    sword_growth = 1.7,
-
-    rod_base = 12,
-    rod_growth = 1.75,
-
-    speed_base = 20,
-    speed_growth = 1.65,
-
-    cooldown_base = 35,
-    cooldown_growth = 1.75,
-}
+-- economy constants
+local ECON = constants.shops.ECON
 
 -- animation state for each shop
 local function create_shop_animation(target_y)
