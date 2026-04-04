@@ -318,6 +318,11 @@ function hunger.draw_hud(state)
     local hunger_config = state.constants.hunger
     sync_hunger_levels(player_ship, hunger_config)
 
+    local mods_count = 0
+    if state.mods then
+        mods_count = tonumber(state.mods.count) or 0
+    end
+
     local lowest_hunger = get_lowest_hunger(player_ship.hunger_levels)
     if lowest_hunger then
         love.graphics.setColor(1, 1, 1, 1)
@@ -329,6 +334,13 @@ function hunger.draw_hud(state)
             love.graphics.circle("fill", 150, 58, 5)
             love.graphics.setColor(1, 1, 1, 1)
         end
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
+    if mods_count > 0 then
+        love.graphics.print(string.format("Mods: %d", mods_count), 10, 70)
+    else
+        love.graphics.print("no mods", 10, 70)
     end
 
     if player_ship.hunger_alert_timer > 0 and player_ship.hunger_alert_text ~= "" then

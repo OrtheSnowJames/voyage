@@ -86,7 +86,8 @@ state.ui = {
 state.actions = {}
 state.mods = {
     module = mods,
-    active = false
+    active = false,
+    count = 0
 }
 
 -- derived settings (automatically update when config changes)
@@ -556,9 +557,10 @@ function game.load()
     mobile_controls.enabled = on_mobile
 
     mods.load_all(state)
-    state.mods.active = mods.has_loaded_mods()
+    state.mods.count = mods.count()
+    state.mods.active = state.mods.count > 0
     if state.mods.active then
-        print(string.format("Loaded %d mod(s)", mods.count()))
+        print(string.format("Loaded %d mod(s)", state.mods.count))
     end
 
     local saved_data = serialize.load_data({
@@ -718,12 +720,12 @@ local function during_sleep()
         near_shop = true
     end
     
-    -- if near a shop, heal fainted crew members
+    -- if near a shop, recover fainted enemy crew members
     if near_shop and player_ship.fainted_men > 0 then
-        print("Healing " .. player_ship.fainted_men .. " fainted crew members...")
+        print("Recovering " .. player_ship.fainted_men .. " fainted enemy crew member(s)...")
         player_ship.men = player_ship.men + player_ship.fainted_men
         player_ship.fainted_men = 0
-        print("All crew members healed!")
+        print("All fainted enemy crew recovered!")
     end
 
     -- note: game will be saved after waking up, not during sleep

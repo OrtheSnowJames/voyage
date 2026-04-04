@@ -591,23 +591,23 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
     
     -- healing section (third row center)
     suit.layout:reset(grid_start_x + section_width + padding, row3_y)
-    suit.Label("Pharmacy", {align = "center"}, suit.layout:row(section_width, 30))
+    suit.Label("Recovery Bay", {align = "center"}, suit.layout:row(section_width, 30))
     local healing_cost = player_ship.fainted_men * 10
     if player_ship.fainted_men > 0 then
         if coins >= healing_cost then
-            if suit.Button("Heal Fainted Crew (" .. healing_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
+            if suit.Button("Recover Enemy Crew (" .. healing_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
                 coins = coins - healing_cost
                 player_ship.men = player_ship.men + player_ship.fainted_men
-                print("Healed " .. player_ship.fainted_men .. " crew members!")
+                print("Recovered " .. player_ship.fainted_men .. " enemy crew member(s)!")
                 player_ship.fainted_men = 0
             end
         else
             suit.Label("Need " .. healing_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
         end
     else
-        suit.Label("No fainted crew", {align = "center"}, suit.layout:row(section_width, 30))
+        suit.Label("No fainted enemy crew", {align = "center"}, suit.layout:row(section_width, 30))
     end
-    suit.Label("Fainted: " .. player_ship.fainted_men, {align = "center"}, suit.layout:row(section_width, 30))
+    suit.Label("Enemy Fainted: " .. player_ship.fainted_men, {align = "center"}, suit.layout:row(section_width, 30))
     
     -- inventory section (third row right)
     suit.layout:reset(grid_start_x + (section_width + padding) * 2, row3_y)

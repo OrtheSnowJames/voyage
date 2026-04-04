@@ -20,7 +20,8 @@ local constants = {
         target_zoom = 2.0,
         result_display_time = 3.0,
         defeat_flash_duration = 3.0,
-        defeat_text_display_time = 2.0
+        defeat_text_display_time = 2.0,
+        careless_crew_advantage_multiplier = 3
     },
     ship = {
         start_x = 100,

@@ -1,6 +1,7 @@
 local combat = {}
 local constants = require("game.constants")
 local FISHING_LEVEL = constants.fishing_level
+local CARELESS_CREW_ADVANTAGE_MULTIPLIER = constants.combat.careless_crew_advantage_multiplier
 
 local swords = {
     "Basic Sword",
@@ -80,8 +81,8 @@ function combat.combat(crew_size, enemy_size, sword_level, top_sword_level, play
         }
     end
     
-    -- check for farming penalty (10x or more crew than enemy)
-    if crew_size >= enemy_size * 10 then
+    -- check for farming penalty (3x or more crew than enemy)
+    if crew_size >= enemy_size * CARELESS_CREW_ADVANTAGE_MULTIPLIER then
         -- apply harsh penalty - lose 90% of crew
         local casualties = math.floor(crew_size * 0.9)
         print("Farming penalty applied - 90% casualties")

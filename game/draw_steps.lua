@@ -162,7 +162,7 @@ local function draw_combat_result_text(state)
             result_text = {
                 "Victory!",
                 string.format("Lost: %d crew", combat_state.result.casualties),
-                string.format("Fainted: %d crew", combat_state.result.fainted)
+                string.format("Enemy Fainted: %d crew", combat_state.result.fainted)
             }
         end
     elseif combat_state.defeat_flash.timer < combat_state.defeat_flash.text_display_time then
