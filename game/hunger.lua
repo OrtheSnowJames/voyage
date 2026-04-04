@@ -143,6 +143,31 @@ local function calculate_feed_amount(fish_value, min_current_value, max_current_
     return adjusted_feed
 end
 
+local function feed_one_crew_member(state, player_ship, hunger_config)
+    local fish_name, fish_value = consume_best_fish(player_ship.caught_fish, state.fishing.module)
+    if not fish_name then
+        return nil, nil
+    end
+
+    local min_current_value, max_current_value = get_current_catch_value_range(state.fishing.module, player_ship)
+    local feed_amount = calculate_feed_amount(
+        fish_value,
+        min_current_value,
+        max_current_value,
+        hunger_config
+    )
+    local hungriest_index = find_hungriest_index(player_ship.hunger_levels)
+
+    if hungriest_index then
+        player_ship.hunger_levels[hungriest_index] = math.min(
+            hunger_config.max,
+            player_ship.hunger_levels[hungriest_index] + feed_amount
+        )
+    end
+
+    return fish_name, feed_amount
+end
+
 local function can_decay_hunger(current_state, GameType)
     return current_state == GameType.VOYAGE or
         current_state == GameType.FISHING or
@@ -234,31 +259,66 @@ function hunger.handle_feed_button(state, options)
         return
     end
 
-    local fish_name, fish_value = consume_best_fish(player_ship.caught_fish, state.fishing.module)
+    local fish_name, feed_amount = feed_one_crew_member(state, player_ship, hunger_config)
     if not fish_name then
         set_hunger_alert(hunger_config, "No fish to feed the crew.")
         return
     end
 
-    local min_current_value, max_current_value = get_current_catch_value_range(state.fishing.module, player_ship)
-    local feed_amount = calculate_feed_amount(
-        fish_value,
-        min_current_value,
-        max_current_value,
-        hunger_config
-    )
-    local hungriest_index = find_hungriest_index(player_ship.hunger_levels)
-
-    if hungriest_index then
-        player_ship.hunger_levels[hungriest_index] = math.min(
-            hunger_config.max,
-            player_ship.hunger_levels[hungriest_index] + feed_amount
-        )
-    end
-
     local message = string.format("Fed crew with %s (+%d hunger)", fish_name, feed_amount)
     set_hunger_alert(hunger_config, message)
     state.fishing.runtime.add_catch_text(message)
+end
+
+function hunger.handle_feed_all_button(state, options)
+    local gamestate = state.system.gamestate
+    local GameType = state.system.gametype
+    if gamestate.get() ~= GameType.VOYAGE then
+        return
+    end
+
+    options = options or {}
+    local suit = state.ui.suit
+    local size = state.system.size
+    local player_ship = state.player
+    local hunger_config = state.constants.hunger
+
+    local button_x = options.x or 10
+    local button_y = options.y or (size.CANVAS_HEIGHT - 70)
+    local button_width = options.width or 80
+    local button_height = options.height or 30
+    local button_id = options.id or "feed_all_crew"
+
+    if not suit.Button("Feed All", {id = button_id}, button_x, button_y, button_width, button_height).hit then
+        return
+    end
+
+    sync_hunger_levels(player_ship, hunger_config)
+
+    if player_ship.men <= 0 or #player_ship.hunger_levels == 0 then
+        set_hunger_alert(hunger_config, "No crew left to feed.")
+        return
+    end
+
+    local crew_count = math.max(0, math.floor(tonumber(player_ship.men) or 0))
+    if #player_ship.caught_fish < crew_count then
+        set_hunger_alert(hunger_config, "Not enough fish to feed everyone.")
+        return
+    end
+
+    local total_hunger_added = 0
+    for _ = 1, crew_count do
+        local _, feed_amount = feed_one_crew_member(state, player_ship, hunger_config)
+        if feed_amount then
+            total_hunger_added = total_hunger_added + feed_amount
+        end
+    end
+
+    local message = string.format("Fed all crew (%d fish used)", crew_count)
+    set_hunger_alert(hunger_config, message)
+    state.fishing.runtime.add_catch_text(
+        string.format("Crew meal: +%d total hunger", math.floor(total_hunger_added + 0.5))
+    )
 end
 
 function hunger.update(dt, state)

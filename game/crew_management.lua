@@ -11,6 +11,7 @@ local ACTION_WIDTH = 220
 local ACTION_HEIGHT = 36
 local ACTION_GAP = 120
 local ACTION_ROW_Y = 320
+local ACTION_STACK_GAP = 12
 
 local function get_layout(size)
     local center_x = math.floor(size.CANVAS_WIDTH / 2)
@@ -31,6 +32,12 @@ local function get_layout(size)
         feed = {
             x = left_x,
             y = ACTION_ROW_Y,
+            width = ACTION_WIDTH,
+            height = ACTION_HEIGHT
+        },
+        feed_all = {
+            x = left_x,
+            y = ACTION_ROW_Y + ACTION_HEIGHT + ACTION_STACK_GAP,
             width = ACTION_WIDTH,
             height = ACTION_HEIGHT
         },
@@ -69,6 +76,13 @@ function crew_management.handle_buttons(state)
         width = layout.feed.width,
         height = layout.feed.height,
         id = "feed_crew_centered"
+    })
+    hunger.handle_feed_all_button(state, {
+        x = layout.feed_all.x,
+        y = layout.feed_all.y,
+        width = layout.feed_all.width,
+        height = layout.feed_all.height,
+        id = "feed_all_crew_centered"
     })
 
     local sell_price = shop.get_crew_hire_cost(math.max(1, state.player.men - 1))
@@ -116,6 +130,12 @@ function crew_management.draw_overlay(state)
         feed_label,
         layout.feed.x + (layout.feed.width - font:getWidth(feed_label)) / 2,
         layout.feed.y - 26
+    )
+    local feed_all_label = "Feed Everyone"
+    love.graphics.print(
+        feed_all_label,
+        layout.feed_all.x + (layout.feed_all.width - font:getWidth(feed_all_label)) / 2,
+        layout.feed_all.y - 26
     )
 
     local right_label = "Sell Crew Member"
