@@ -376,16 +376,15 @@ function draw_steps.draw_world(state)
             )
         end
 
-        love.graphics.push()
-        love.graphics.scale(1 / ship_animation.scale, 1 / ship_animation.scale)
-        love.graphics.rotate(-player_ship.rotation)
+        love.graphics.pop()
+
+        -- Draw the ship name in world space so it stays upright and below the ship.
         love.graphics.setColor(1, 1, 1, 1)
         local font = love.graphics.getFont()
         local text_width = font:getWidth(player_ship.name)
-        love.graphics.print(player_ship.name, -text_width / 2, player_ship.radius * 1.5 * ship_animation.scale)
-        love.graphics.pop()
-
-        love.graphics.pop()
+        local name_x = player_ship.x - (text_width / 2)
+        local name_y = player_ship.y + (player_ship.radius * 1.8) + 8
+        love.graphics.print(player_ship.name, name_x, name_y)
 
         draw_combat_result_text(state)
         draw_catch_texts(state)
