@@ -165,6 +165,11 @@ local function draw_combat_result_text(state)
                 string.format("Lost: %d crew", combat_state.result.casualties),
                 string.format("Enemy Fainted: %d crew", combat_state.result.fainted)
             }
+            if (combat_state.result.fainted_overflow or 0) > 0 then
+                local stored = combat_state.result.fainted_stored or 0
+                table.insert(result_text, "Recovery Bay full!")
+                table.insert(result_text, string.format("Only %d men fainted.", stored))
+            end
         end
     elseif combat_state.defeat_flash.timer < combat_state.defeat_flash.text_display_time then
         result_text = {
@@ -191,7 +196,7 @@ local function draw_combat_result_text(state)
     for _, line in ipairs(result_text) do
         local width = font:getWidth(line)
         max_width = math.max(max_width, width)
-        total_height = (total_height + font:getHeight()) * 2
+        total_height = total_height + font:getHeight()
     end
 
     local padding = 20 / scale

@@ -1,4 +1,6 @@
 local update_steps = {}
+local constants = require("game.constants")
+local RECOVERY_BAY_MAX = constants.combat.recovery_bay_max or 15
 
 local function clear_catch_texts(state)
     local catch_texts = state.fishing.runtime.get_catch_texts()
@@ -137,7 +139,7 @@ end
 
 function update_steps.handle_back_to_menu_button(state)
     local suit = state.ui.suit
-    if suit.Button("Back to Menu", {id = "menu"}, suit.layout:row(120, 30)).hit then
+    if suit.Button("Save & Return", {id = "menu"}, suit.layout:row(120, 30)).hit then
         state.player.name = state.system.menu.get_name()
         local data = state.system.game.get_saveable_data()
         state.system.serialize.save_data(data)
@@ -241,7 +243,12 @@ function update_steps.combat_state(dt, state)
 
             if result.victory then
                 player_ship.men = player_ship.men - result.casualties
-                player_ship.fainted_men = player_ship.fainted_men + result.fainted
+                local open_slots = math.max(0, RECOVERY_BAY_MAX - player_ship.fainted_men)
+                local stored_fainted = math.min(open_slots, result.fainted)
+                local overflow_fainted = math.max(0, result.fainted - stored_fainted)
+                player_ship.fainted_men = player_ship.fainted_men + stored_fainted
+                result.fainted_stored = stored_fainted
+                result.fainted_overflow = overflow_fainted
                 combat_state.result = result
                 combat_state.result_display_time = 3.0
             else

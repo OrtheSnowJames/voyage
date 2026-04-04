@@ -48,22 +48,46 @@ local function consume_best_fish(caught_fish, fishing_module)
         return nil, nil
     end
 
-    local best_index = 1
-    local best_name = caught_fish[1]
-    local best_value = fishing_module.get_fish_value(best_name)
+    local best_index
+    local best_name
+    local best_value
 
-    for i = 2, #caught_fish do
+    for i = 1, #caught_fish do
         local fish_name = caught_fish[i]
+        local blocked_for_feeding = (fish_name == "Gold Sturgeon")
+            or (fishing_module.is_night_fish and fishing_module.is_night_fish(fish_name))
+        if not blocked_for_feeding then
         local fish_value = fishing_module.get_fish_value(fish_name)
-        if fish_value > best_value then
-            best_index = i
-            best_name = fish_name
-            best_value = fish_value
+            if (not best_value) or fish_value > best_value then
+                best_index = i
+                best_name = fish_name
+                best_value = fish_value
+            end
         end
+    end
+
+    if not best_index then
+        return nil, nil
     end
 
     table.remove(caught_fish, best_index)
     return best_name, best_value
+end
+
+local function count_feedable_fish(caught_fish, fishing_module)
+    if not caught_fish then
+        return 0
+    end
+
+    local count = 0
+    for _, fish_name in ipairs(caught_fish) do
+        local blocked_for_feeding = (fish_name == "Gold Sturgeon")
+            or (fishing_module.is_night_fish and fishing_module.is_night_fish(fish_name))
+        if not blocked_for_feeding then
+            count = count + 1
+        end
+    end
+    return count
 end
 
 local function get_current_catch_value_range(fishing_module, player_ship)
@@ -301,7 +325,8 @@ function hunger.handle_feed_all_button(state, options)
     end
 
     local crew_count = math.max(0, math.floor(tonumber(player_ship.men) or 0))
-    if #player_ship.caught_fish < crew_count then
+    local feedable_fish_count = count_feedable_fish(player_ship.caught_fish, state.fishing.module)
+    if feedable_fish_count < crew_count then
         set_hunger_alert(hunger_config, "Not enough fish to feed everyone.")
         return
     end

@@ -175,6 +175,15 @@ function fishing.is_special_fish(fish_name)
     return false
 end
 
+function fishing.is_night_fish(fish_name)
+    for _, night in ipairs(rare_night_fish) do
+        if fish_name == night then
+            return true
+        end
+    end
+    return false
+end
+
 function fishing.set_corruption_level(level)
     corruption_level = math.max(0, tonumber(level) or 0)
 end
@@ -255,7 +264,7 @@ function fishing.get_fish_value(fish_name)
 
     for i, f in ipairs(rare_night_fish) do
         if f == fish_name then
-            return #fish + i + FISH_VALUE_OFFSET
+            return (#fish + i + FISH_VALUE_OFFSET) * 1000
         end
     end
 

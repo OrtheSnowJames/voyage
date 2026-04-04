@@ -22,7 +22,8 @@ local constants = {
         defeat_flash_duration = 3.0,
         defeat_text_display_time = 2.0,
         careless_crew_advantage_multiplier = 3,
-        fainted_recovery_penalty_per_enemy = 0.005
+        fainted_recovery_penalty_per_enemy = 0.005,
+        recovery_bay_max = 15
     },
     ship = {
         start_x = 100,

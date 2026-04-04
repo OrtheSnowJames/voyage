@@ -45,6 +45,7 @@ local GOLD_STURGEON_SELL_PRICE = constants.fish.gold_sturgeon_sell_price or 6000
 local FISH_SELL_MULTIPLIER = 0.6
 local MAX_DEPTH_BAND = math.max(1, (constants.fish.regular_fish_count or 30) - 2)
 local CARELESS_CREW_ADVANTAGE_MULTIPLIER = constants.combat.careless_crew_advantage_multiplier or 3
+local RECOVERY_BAY_MAX = constants.combat.recovery_bay_max or 15
 
 -- animation state for each shop
 local function create_shop_animation(target_y)
@@ -159,6 +160,34 @@ local function count_fish_in_inventory(fish_name, inventory)
         end
     end
     return count
+end
+
+local function get_fish_action_button_color(fish_name)
+    if fish_name == "Sturgeon" then
+        return {
+            normal = {bg = {0.72, 0.18, 0.18}, fg = {1, 1, 1}},
+            hovered = {bg = {0.82, 0.24, 0.24}, fg = {1, 1, 1}},
+            active = {bg = {0.58, 0.13, 0.13}, fg = {1, 1, 1}}
+        }
+    end
+
+    if fish_name == "Gold Sturgeon" then
+        return {
+            normal = {bg = {0.82, 0.67, 0.10}, fg = {0.08, 0.08, 0.08}},
+            hovered = {bg = {0.92, 0.78, 0.18}, fg = {0.08, 0.08, 0.08}},
+            active = {bg = {0.70, 0.56, 0.08}, fg = {0.08, 0.08, 0.08}}
+        }
+    end
+
+    if fishing.is_night_fish and fishing.is_night_fish(fish_name) then
+        return {
+            normal = {bg = {0.45, 0.26, 0.62}, fg = {1, 1, 1}},
+            hovered = {bg = {0.53, 0.32, 0.72}, fg = {1, 1, 1}},
+            active = {bg = {0.36, 0.20, 0.52}, fg = {1, 1, 1}}
+        }
+    end
+
+    return nil
 end
 
 function shop.get_coins()
@@ -303,7 +332,7 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
     
     -- get window dimensions
     local window_width = size.CANVAS_WIDTH
-    local window_height = love.graphics.getHeight()
+    local window_height = size.CANVAS_HEIGHT
     
     if gamestate.get() == GameType.SHOP_TRANSFER then
         -- transfer interface
@@ -338,10 +367,32 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
             fish_counts[fish] = fish_counts[fish] + 1
         end
         
-        for i, fish in ipairs(unique_fish) do
+        local items_per_page = 10
+        local max_scroll = math.max(0, #unique_fish - items_per_page)
+        local list_x = window_width/2 - 200
+        local current_y = 230
+
+        suit.layout:reset(list_x, current_y)
+        if inventory_state.scroll_offset > 0 then
+            if suit.Button("▲ Scroll Up", suit.layout:row(400, 30)).hit then
+                inventory_state.scroll_offset = math.max(0, inventory_state.scroll_offset - 3)
+            end
+        else
+            suit.Label("", {align = "center"}, suit.layout:row(400, 30))
+        end
+
+        local start_index = inventory_state.scroll_offset + 1
+        local end_index = math.min(start_index + items_per_page - 1, #unique_fish)
+        current_y = current_y + 35
+
+        for i = start_index, end_index do
+            local fish = unique_fish[i]
             local button_text = fish .. " (" .. fish_counts[fish] .. ")"
+            suit.layout:reset(list_x, current_y)
             if coins >= 5 then
-                if suit.Button(button_text, suit.layout:row(400, 30)).hit then
+                local color = get_fish_action_button_color(fish)
+                local options = color and {color = color} or {}
+                if suit.Button(button_text, options, suit.layout:row(400, 30)).hit then
                     -- transfer one fish
                     coins = coins - 5
                     table.insert(player_ship.inventory, fish)
@@ -363,12 +414,29 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
             else
                 suit.Label(button_text .. " - Need 5 coins", {align = "left"}, suit.layout:row(400, 30))
             end
+            current_y = current_y + 35
+        end
+
+        suit.layout:reset(list_x, current_y)
+        if inventory_state.scroll_offset < max_scroll then
+            if suit.Button("▼ Scroll Down", suit.layout:row(400, 30)).hit then
+                inventory_state.scroll_offset = math.min(max_scroll, inventory_state.scroll_offset + 3)
+            end
+        else
+            suit.Label("", {align = "center"}, suit.layout:row(400, 30))
+        end
+
+        if #unique_fish > items_per_page then
+            suit.layout:reset(list_x, current_y + 35)
+            local scroll_info = string.format("Showing %d-%d of %d fish", start_index, end_index, #unique_fish)
+            suit.Label(scroll_info, {align = "center"}, suit.layout:row(400, 20))
         end
         
-        -- back button
-        suit.layout:reset(window_width/2 - 100, window_height - 100)
+        -- back button (bottom-right)
+        suit.layout:reset(window_width - 220, window_height - 60)
         if suit.Button("Back to Shop", suit.layout:row(200, 30)).hit then
             gamestate.set(GameType.SHOP)
+            inventory_state.scroll_offset = 0
         end
         
     elseif gamestate.get() == GameType.SHOP_VIEW_INVENTORY then
@@ -411,16 +479,22 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
             local current_y = 180  -- start y position after scroll up button
             for i = start_index, end_index do
                 local fish = unique_inventory[i]
+                if not fish then
+                    break
+                end
                 local fish_value = fishing.get_fish_value(fish)
+                local fish_count = inventory_counts[fish] or 0
                 
                 -- fish info on left side
                 suit.layout:reset(window_width/2 - 200, current_y)
-                suit.Label(fish .. " x" .. inventory_counts[fish] .. " (Value: " .. fish_value .. " each)", 
+                suit.Label(fish .. " x" .. fish_count .. " (Value: " .. fish_value .. " each)", 
                           {align = "left"}, suit.layout:row(280, 30))
                 
                 -- deposit button on right side
                 suit.layout:reset(window_width/2 + 90, current_y)
-                if suit.Button("Deposit", suit.layout:row(80, 30)).hit then
+                local deposit_color = get_fish_action_button_color(fish)
+                local deposit_options = deposit_color and {color = deposit_color} or {}
+                if suit.Button("Deposit", deposit_options, suit.layout:row(80, 30)).hit then
                     -- remove one fish from inventory
                     for j, inv_fish in ipairs(player_ship.inventory) do
                         if inv_fish == fish then
@@ -447,6 +521,7 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
                     end
                     
                     print("Deposited " .. fish .. " to caught fish!")
+                    break
                 end
                 
                 -- move to next row
@@ -469,8 +544,8 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
             end
         end
         
-        -- back button
-        suit.layout:reset(window_width/2 - 100, window_height - 100)
+        -- back button (bottom-right)
+        suit.layout:reset(window_width - 220, window_height - 60)
         if suit.Button("Back to Shop", suit.layout:row(200, 30)).hit then
             gamestate.set(GameType.SHOP)
             inventory_state.scroll_offset = 0  -- reset scroll when leaving
@@ -650,7 +725,11 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
     else
         suit.Label("No fainted enemy crew", {align = "center"}, suit.layout:row(section_width, 30))
     end
-    suit.Label("Enemy Fainted: " .. player_ship.fainted_men, {align = "center"}, suit.layout:row(section_width, 30))
+    suit.Label(
+        string.format("Enemy Fainted: %d/%d", player_ship.fainted_men, RECOVERY_BAY_MAX),
+        {align = "center"},
+        suit.layout:row(section_width, 30)
+    )
     
     -- inventory section (third row right)
     suit.layout:reset(grid_start_x + (section_width + padding) * 2, row3_y)
@@ -659,6 +738,7 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
         gamestate.set(GameType.SHOP_TRANSFER)
         inventory_state.search_text.text = ""
         inventory_state.selected_fish = nil
+        inventory_state.scroll_offset = 0
         -- create filtered fish list
         inventory_state.filtered_fish = {}
         for _, fish in ipairs(player_ship.caught_fish) do
@@ -667,6 +747,7 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
     end
     if suit.Button("View Inventory", suit.layout:row(section_width, 30)).hit then
         gamestate.set(GameType.SHOP_VIEW_INVENTORY)
+        inventory_state.scroll_offset = 0
     end
     
     end -- close the else block for regular shop interface
