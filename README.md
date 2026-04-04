@@ -1,56 +1,55 @@
 # Voyage
 
-Voyage is a grinding game meant to be played on spare time.
+Voyage is a sailing and grinding game about managing a crew, taking risks, and pushing into very deep waters.
 
-## Gameplay
+## Gameplay Loop
+
+* **Fish** to earn coins
+* **Upgrade** your ship, rod, and sword
+* **Fight ships** to gain crew (and risk losing your own)
+* **Expand** into deeper, more dangerous waters
+
+## Key Mechanics
 
 ### Fishing
-To fish, press the `f` key. When the cooldown is done, all of your men will fish.
 
-### Crew Management
-- **Hiring**: Go to the shop to hire more crew members
-- **Combat**: 
-  - You need more men than the enemy to win fights
-  - If you have fewer men, you'll lose the fight and your save data
-  - If you have more men, you'll lose some men but get fainted men
-  - Fainted men can be healed by sleeping next to a shop or healing them with medications from the shop pharmacy
-  - **Warning**: If you bring 10x or more men than the enemy has, your crew will get careless and you'll lose 90% of them to friendly fire!
+Press `F` to fish. Your crew fishes automatically after the cooldown.
 
-### Shop System
-The shop allows you to:
-- Sell your caught fish
-- Buy upgrades and items
-- Heal fainted crew members
-- Store prized fish in an inventory system
+### Crew & Combat
 
-## Getting Started
+* More crew than the enemy = victory
+* Fewer crew = defeat (and save loss)
+* Winning gives you **fainted enemy crew** you can recover
+* Stronger swords reduce your losses
 
-### Prerequisites
-You need LÖVE (a Lua game engine) to run the game.
+Bringing way more crew than the enemy causes **carelessness**, leading to heavy losses (most of your crew).
 
-On Arch-based systems:
+### Progression
+
+* Upgrade rods → easier fishing
+* Upgrade swords → fewer losses
+* Upgrade ship → move faster and explore further
+* Unlock ports to survive deeper waters
+
+### Shops
+
+* Sell fish
+* Buy upgrades
+* Heal crew
+* Store valuable fish
+
+## Running the Game
+
+Requires LÖVE2D.
+
 ```sh
 sudo pacman -S love
-```
-
-### Installation
-1. Clone the repository with submodules:
-```sh
 git clone --recursive https://github.com/OrtheSnowJames/voyage.git
-```
-
-2. If you already cloned without submodules, initialize them:
-```sh
-git submodule update --init --recursive
-```
-
-### Running the Game
-In the game directory:
-```sh
+cd voyage
 love .
 ```
 
-## Roadmap
-- Add better assets
-- Give a makeover
-- Make things more natural
+## Notes
+
+This project is actively evolving and being refined over time.
+I just got motivation to start working on this after 7 months somehow :)
