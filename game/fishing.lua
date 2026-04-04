@@ -4,6 +4,7 @@ local constants = require("game.constants")
 local FISHING_LEVEL = constants.fishing_level
 local FISH_VALUE_OFFSET = constants.fish.value_offset or 0
 local GOLD_STURGEON_VALUE = constants.fish.gold_sturgeon_value or 100000
+local NIGHT_FISH_VALUE_MULTIPLIER = constants.fish.night_fish_value_multiplier or 1000
 
 local fish = {
     "Bluegill", "Crappie", "Yellow Perch", "Redfin Pickerel", "Bullhead Catfish",
@@ -264,7 +265,7 @@ function fishing.get_fish_value(fish_name)
 
     for i, f in ipairs(rare_night_fish) do
         if f == fish_name then
-            return (#fish + i + FISH_VALUE_OFFSET) * 1000
+            return (#fish + i + FISH_VALUE_OFFSET) * NIGHT_FISH_VALUE_MULTIPLIER
         end
     end
 

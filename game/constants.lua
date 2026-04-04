@@ -86,6 +86,7 @@ local constants = {
         regular_fish_count = 30,
         value_offset = 2,
         gold_sturgeon_value = 100000,
+        night_fish_value_multiplier = 777,
         gold_sturgeon_sell_price = 60000
     },
     hunger = {
