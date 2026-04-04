@@ -23,6 +23,7 @@ local shopkeeper_factory = require("game.shopkeeper")
 local constants = require("game.constants")
 local state_factory = require("game.state")
 local mods = require("game.mods")
+local hunger = require("game.hunger")
 local FISHING_LEVEL = constants.fishing_level
 local fishing_minigame = fishing.minigame
 
@@ -241,6 +242,7 @@ local function reset_game()
     player_ship.sword = "Basic Sword"
     player_ship.caught_fish = {}
     player_ship.inventory = {}
+    hunger.reset(player_ship, constants.hunger)
     player_ship.time_system.time = 0
     reset_cheating_state()
     if state.fishing.runtime then
@@ -585,6 +587,7 @@ function game.load()
     -- migration defaults for older saves
     player_ship.caught_fish = player_ship.caught_fish or {}
     player_ship.inventory = player_ship.inventory or {}
+    hunger.sync(player_ship, constants.hunger)
 
     if player_ship.rainbows == true then
         player_ship.rainbows = RAINBOWS_START_VALUE
@@ -786,6 +789,12 @@ function game.update(dt)
 
     if update_steps.handle_back_to_menu_button(state) then
         return GameType.MENU
+    end
+
+    hunger.handle_feed_button(state)
+    local hunger_result = hunger.update(dt, state)
+    if hunger_result then
+        return hunger_result
     end
 
     update_steps.shop_and_navigation(dt, state)

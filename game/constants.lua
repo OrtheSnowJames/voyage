@@ -61,6 +61,21 @@ local constants = {
         gold_sturgeon_unlock_hour = 11.5,
         regular_fish_count = 30
     },
+    hunger = {
+        max = 100,
+        start = 100,
+        days_without_food_to_die = 1,
+        decay_per_second = 0.05,
+        half_threshold = 0.5,
+        feed_below_current_percent = 5,
+        feed_lowest_current_percent = 25,
+        feed_mid_current_percent = 50,
+        feed_highest_current_percent = 90,
+        feed_above_current_percent = 100,
+        feed_min = 1,
+        feed_max = 100,
+        alert_duration = 4
+    },
     cheat = {
         depth_tolerance = 10,
         time_skip_threshold_seconds = 20,

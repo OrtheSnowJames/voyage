@@ -27,6 +27,11 @@ local function create_player_time_system()
 end
 
 local function create_player_ship(sprite)
+    local hunger_levels = {}
+    for i = 1, constants.ship.start_crew do
+        hunger_levels[i] = constants.hunger.start
+    end
+
     return {
         x = constants.ship.start_x,
         y = constants.ship.start_y,
@@ -50,6 +55,9 @@ local function create_player_ship(sprite)
         direction = 0,
         caught_fish = {},
         inventory = {},
+        hunger_levels = hunger_levels,
+        hunger_alert_text = "",
+        hunger_alert_timer = 0,
         rainbows = 0,
         corruption_started = false,
         debug_menu_opened = false,

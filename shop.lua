@@ -27,6 +27,7 @@ local SHOP_SPACING = constants.fishing_level  -- distance between shops/levels
 local SHOP_SIZE = { width = 60, height = 40 }  -- size of the shop platform
 local INTERACTION_RANGE = 50  -- how close the player needs to be to interact
 local SHOP_ANIMATION_SPEED = 500  -- speed of shop movement in pixels per second
+local SHIP_PARTS_ACCEL_BONUS = 5  -- acceleration gained per ship parts upgrade
 
 -- port-a-shops state
 local port_a_shops = {}
@@ -45,12 +46,12 @@ local ECON = {
 
     -- continuous crew cost curve: starts cheap and ramps smoothly per hire
     crew_start_cost = 8,
-    crew_growth = 1.6,
+    crew_growth = 1.5,
 
-    sword_base = 22,
+    sword_base = 11,
     sword_growth = 1.7,
 
-    rod_base = 24,
+    rod_base = 12,
     rod_growth = 1.75,
 
     speed_base = 20,
@@ -554,12 +555,17 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
         if suit.Button("Upgrade Speed (" .. speed_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
             coins = coins - speed_cost
             player_ship.max_speed = player_ship.max_speed + 20
-            print("Upgraded speed to: " .. player_ship.max_speed)
+            player_ship.acceleration = player_ship.acceleration + SHIP_PARTS_ACCEL_BONUS
+            print("Upgraded speed to: " .. player_ship.max_speed .. " and acceleration to: " .. player_ship.acceleration)
         end
     else
         suit.Label("Need " .. speed_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
     end
-    suit.Label("Current: " .. player_ship.max_speed .. " speed", {align = "center"}, suit.layout:row(section_width, 30))
+    suit.Label(
+        "Speed: " .. player_ship.max_speed .. " | Accel: " .. player_ship.acceleration,
+        {align = "center"},
+        suit.layout:row(section_width, 30)
+    )
     
     -- third row
     local row3_y = row2_y + section_height + padding
