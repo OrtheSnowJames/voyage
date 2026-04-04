@@ -17,13 +17,13 @@ local game_states = {
     [GameType.SLEEPING] = true,
 }
 
--- Canvas system for consistent rendering
+-- canvas system for consistent rendering
 local canvas = nil
 local CANVAS_WIDTH = size.CANVAS_WIDTH
 local CANVAS_HEIGHT = size.CANVAS_HEIGHT
 
 function love.load()
-    -- Create the fixed-size canvas
+    -- create the fixed-size canvas
     canvas = love.graphics.newCanvas(CANVAS_WIDTH, CANVAS_HEIGHT)
     
     gamestate.set(GameType.MENU)
@@ -35,7 +35,7 @@ function love.update(dt)
     if game_states[gamestate.get()] then
         local next_state_str = game.update(dt)
         if next_state_str then
-            gamestate.set(next_state_str) -- Should only be "menu"
+            gamestate.set(next_state_str) -- should only be "menu"
         end
     elseif gamestate.get() == GameType.MENU then
         local next_state_str = menu.update(dt)
@@ -52,33 +52,33 @@ function love.update(dt)
 end
 
 function love.draw()
-    -- Set the canvas as the render target with stencil support
+    -- set the canvas as the render target with stencil support
     love.graphics.setCanvas{canvas, stencil=true}
     canvas:setFilter("nearest", "nearest")
     love.graphics.clear()
     
-    -- Draw everything to the canvas at fixed 800x600 resolution
+    -- draw everything to the canvas at fixed 800x600 resolution
     if game_states[gamestate.get()] then
         game.draw()
     elseif gamestate.get() == GameType.MENU then
         menu.draw()
     end
     
-    -- Reset canvas and draw it scaled to window size
+    -- reset canvas and draw it scaled to window size
     love.graphics.setCanvas()
     
-    -- Calculate scaling to fit the canvas in the window
+    -- calculate scaling to fit the canvas in the window
     local window_width = love.graphics.getWidth()
     local window_height = love.graphics.getHeight()
     local scale_x = window_width / CANVAS_WIDTH
     local scale_y = window_height / CANVAS_HEIGHT
     local scale = math.min(scale_x, scale_y)  -- maintain aspect ratio
     
-    -- Calculate centering offset
+    -- calculate centering offset
     local offset_x = (window_width - CANVAS_WIDTH * scale) / 2
     local offset_y = (window_height - CANVAS_HEIGHT * scale) / 2
     
-    -- Draw the canvas scaled and centered
+    -- draw the canvas scaled and centered
     love.graphics.draw(canvas, offset_x, offset_y, 0, scale, scale)
 end
 
@@ -134,7 +134,7 @@ function love.get_ship_name()
     return ship_name
 end
 
--- Helper functions for coordinate conversion
+-- helper functions for coordinate conversion
 function love.getCanvasWidth()
     return CANVAS_WIDTH
 end
@@ -165,5 +165,5 @@ end
 -- handle window resize
 function love.resize(w, h)
     -- [rainbow frog]
-    -- Canvas system automatically handles resizing since we scale on every draw
+    -- canvas system automatically handles resizing since we scale on every draw
 end

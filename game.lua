@@ -134,7 +134,7 @@ local shore_objects = state.world.shore_objects
 local SHORE_OBJECT_COUNT = constants.world.shore_object_count
 local SHORE_OBJECT_SPACING = shore_width  -- space between objects
 
--- Ship ripple system
+-- ship ripple system
 local ship_ripples = state.world.ship_ripples
 local MAX_RIPPLES = constants.world.max_ripples -- more ripples for a longer wake
 local RIPPLE_SPAWN_DIST = constants.world.ripple_spawn_distance -- spawn a new ripple source every 20 pixels traveled
@@ -149,7 +149,7 @@ local function init_shore_objects()
     end
     for i = 1, SHORE_OBJECT_COUNT do
         table.insert(shore_objects, {
-            x = (i - 11) * SHORE_OBJECT_SPACING, -- Start centered on the player
+            x = (i - 11) * SHORE_OBJECT_SPACING, -- start centered on the player
             y = shore_division
         })
     end
@@ -161,7 +161,7 @@ local function update_shore_objects()
     local view_left = camera.x
     local view_right = camera.x + viewWidth
 
-    -- Find the object with the minimum x and the object with the maximum x
+    -- find the object with the minimum x and the object with the maximum x
     local min_obj = shore_objects[1]
     local max_obj = shore_objects[1]
     for i = 2, #shore_objects do
@@ -173,13 +173,13 @@ local function update_shore_objects()
         end
     end
 
-    -- If the camera view gets too close to the leftmost shore object,
+    -- if the camera view gets too close to the leftmost shore object,
     -- move the rightmost object to the left end to pre-fill the space.
     if view_left < min_obj.x + shore_width then
         max_obj.x = min_obj.x - SHORE_OBJECT_SPACING
     end
 
-    -- If the camera view gets too close to the rightmost shore object,
+    -- if the camera view gets too close to the rightmost shore object,
     -- move the leftmost object to the right end to pre-fill the space.
     if view_right > max_obj.x then
         min_obj.x = max_obj.x + SHORE_OBJECT_SPACING
@@ -385,7 +385,7 @@ end
 function game.get_required_depth_for_fish(fish_name)
     local fish_value = fishing.get_fish_value(fish_name)
     if fish_value == 100000 then
-        return nil -- Gold Sturgeon is handled by the time rule below.
+        return nil -- gold sturgeon is handled by the time rule below.
     end
 
     if fish_value <= REGULAR_FISH_COUNT then
@@ -673,7 +673,7 @@ local function getCurrentWaterColor()
     return visuals.get_current_water_color(player_ship)
 end
 
--- make getCurrentWaterColor accessible to other modules
+-- make getcurrentwatercolor accessible to other modules
 game.getCurrentWaterColor = getCurrentWaterColor
 
 state.fishing.runtime = fishing.create_runtime({

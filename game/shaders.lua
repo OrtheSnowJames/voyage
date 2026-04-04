@@ -68,7 +68,7 @@ function shaders.create()
         float wave2 = noise(uv * vec2(20.0, 10.0) + vec2(time * -0.05, time * 0.15));
         float wave_total = wave1 * 0.7 + wave2 * 0.3;
 
-        // --- Boat Ripples ---
+        // --- boat ripples ---
         float total_ripple_displacement = 0.0;
         for (int i = 0; i < ripple_count; i++) {
             vec2 ripple_source = vec2(ripple_sources_x[i], ripple_sources_y[i]);

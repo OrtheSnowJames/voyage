@@ -1,11 +1,11 @@
--- Canvas dimensions for consistent rendering
+-- canvas dimensions for consistent rendering
 local size = {}
 
--- Fixed canvas dimensions
+-- fixed canvas dimensions
 size.CANVAS_WIDTH = 800
 size.CANVAS_HEIGHT = 600
 
--- Helper functions
+-- helper functions
 function size.getWidth()
     return size.CANVAS_WIDTH
 end

@@ -133,7 +133,7 @@ function combat.combat(crew_size, enemy_size, sword_level, top_sword_level, play
     -- calculate actual casualties based on best_roll and crew advantage
     local base_casualties = math.ceil(enemy_size * best_roll)
     
-    -- A larger crew directly reduces the number of casualties
+    -- a larger crew directly reduces the number of casualties
     local crew_advantage = (crew_size / enemy_size) - 1 -- e.g., 18/6 = 3, advantage = 2
     local crew_reduction = math.floor(base_casualties * (1 - (1 / (1 + crew_advantage))))
     local actual_casualties = math.max(0, base_casualties - crew_reduction)

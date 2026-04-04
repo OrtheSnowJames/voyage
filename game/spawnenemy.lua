@@ -101,7 +101,7 @@ local function is_dangerous_area(y)
     local shop = require("shop")
     local last_shop_y = shop.get_last_port_a_shop_y()
 
-    -- If the player's y is greater than the last shop's y (plus a buffer), it's dangerous.
+    -- if the player's y is greater than the last shop's y (plus a buffer), it's dangerous.
     if math.abs(y) > last_shop_y + 100 then
         return true
     end
@@ -178,7 +178,7 @@ function spawnenemy.update(dt, camera, player_x, player_y)
                                 if is_dangerous then
                     print("DEBUG: dangerous area spawning - checking both lines and random positions")
                     
-                    -- First, try to spawn on fishing-level divider lines
+                    -- first, try to spawn on fishing-level divider lines
                     local start_y = math.floor(min_y / FISHING_LEVEL) * FISHING_LEVEL
                     local end_y = math.ceil(max_y / FISHING_LEVEL) * FISHING_LEVEL
                     
@@ -197,7 +197,7 @@ function spawnenemy.update(dt, camera, player_x, player_y)
                         spawn_y = valid_lines[math.random(1, #valid_lines)]
                         print("DEBUG: Spawning on divider line Y=" .. spawn_y)
                     else
-                        -- Otherwise spawn randomly throughout the area
+                        -- otherwise spawn randomly throughout the area
                         print("DEBUG: Spawning at random position")
                         local max_attempts = 20
                         for i = 1, max_attempts do
@@ -248,7 +248,7 @@ function spawnenemy.update(dt, camera, player_x, player_y)
                     
                     -- print spawn info for debugging
                     if is_dangerous then
-                        -- Check if this was a divider line spawn
+                        -- check if this was a divider line spawn
                         local is_divider_line = false
                         for _, line_y in ipairs(valid_lines or {}) do
                             if math.abs(spawn_y - line_y) < 1 then

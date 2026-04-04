@@ -516,7 +516,7 @@ function draw_steps.draw_time_and_debug(state)
         end
 
         if suit.Button("Print Shore Positions", suit.layout:row(150, 30)).hit then
-            print("--- Shore Debug Info ---")
+            print("--- shore debug info ---")
             print(string.format("Player Position: x=%.2f, y=%.2f", player_ship.x, player_ship.y))
             print("Shore Object Positions:")
             for i, obj in ipairs(state.shore.objects) do
