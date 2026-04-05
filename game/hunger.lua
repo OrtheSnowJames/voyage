@@ -424,6 +424,12 @@ function hunger.draw_hud(state)
         love.graphics.print("no mods", 10, 70)
     end
 
+    if state.system and state.system.serialize and state.system.serialize.was_tampered and state.system.serialize.was_tampered() then
+        love.graphics.setColor(1, 0.3, 0.3, 1)
+        love.graphics.print("Save file tampered", 10, 90)
+        love.graphics.setColor(1, 1, 1, 1)
+    end
+
 end
 
 return hunger

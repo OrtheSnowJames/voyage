@@ -85,7 +85,7 @@ function crew_management.handle_buttons(state)
         id = "feed_all_crew_centered"
     })
 
-    local sell_price = shop.get_crew_hire_cost(math.max(1, state.player.men - 1))
+    local sell_price = shop.get_crew_hire_cost(math.max(1, state.player.loyal_men - 1))
     local sell_label
     if state.player.men > 1 then
         sell_label = string.format("Sell (+%d)", sell_price)

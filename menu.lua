@@ -59,7 +59,9 @@ end
 -- check if save file exists at startup
 local function check_save_file()
     if love.filesystem.getInfo("save.lua") then
-        local save_data = serialize.load_data()
+        local save_data = serialize.load_data({
+            allow_tampered = true
+        })
         if save_data and save_data.name and save_data.name ~= "" then
             state.ship_name.text = save_data.name
             state.name_submitted = true
