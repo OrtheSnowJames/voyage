@@ -94,9 +94,10 @@ function crew_management.handle_buttons(state)
     end
 
     if suit.Button(sell_label, {id = "crew_right_placeholder"}, layout.right_slot.x, layout.right_slot.y, layout.right_slot.width, layout.right_slot.height).hit then
-        if state.player.men > 1 then
+        if state.player.men > 1 and state.player.loyal_men > 1 then -- loyal men are bought from shop and can be sold
             shop.add_coins(sell_price)
             state.player.men = state.player.men - 1
+            state.player.loyal_men = state.player.loyal_men - 1
             alert.show("Sold successfully", 1.6, {1, 1, 1, 1})
         else
             alert.show("Not enough crew", 1.6, {1, 0.3, 0.3, 1})

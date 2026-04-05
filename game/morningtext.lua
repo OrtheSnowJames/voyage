@@ -132,7 +132,9 @@ function morningtext.start(rainbows)
     if corrupted then
         state.lines = corrupted
     else
-        state.lines = wake_texts[math.random(1, #wake_texts)]
+        local line_index = math.random(1, #wake_texts)
+        print(string.format("index: %d", line_index))
+        state.lines = wake_texts[line_index]
     end
 
     state.active = true

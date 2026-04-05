@@ -25,7 +25,8 @@ local CANVAS_HEIGHT = size.CANVAS_HEIGHT
 function love.load()
     -- create the fixed-size canvas
     canvas = love.graphics.newCanvas(CANVAS_WIDTH, CANVAS_HEIGHT)
-    
+    math.randomseed(os.time())
+
     gamestate.set(GameType.MENU)
     game.load()
     menu.load()

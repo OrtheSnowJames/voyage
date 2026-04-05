@@ -1,6 +1,7 @@
 local constants = require("game.constants")
 
 local state = {}
+local START_CREW = constants.ship.start_crew
 
 local function create_mobile_buttons()
     return {
@@ -28,7 +29,7 @@ end
 
 local function create_player_ship(sprite)
     local hunger_levels = {}
-    for i = 1, constants.ship.start_crew do
+    for i = 1, START_CREW do
         hunger_levels[i] = constants.hunger.start
     end
 
@@ -36,7 +37,8 @@ local function create_player_ship(sprite)
         x = constants.ship.start_x,
         y = constants.ship.start_y,
         name = "",
-        men = constants.ship.start_crew,
+        men = START_CREW,
+        loyal_men = START_CREW,
         fainted_men = 0,
         velocity_x = 0,
         velocity_y = 0,

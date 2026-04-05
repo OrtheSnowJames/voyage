@@ -87,7 +87,21 @@ local constants = {
         value_offset = 2,
         gold_sturgeon_value = 100000,
         night_fish_value_multiplier = 777,
-        gold_sturgeon_sell_price = 60000
+        gold_sturgeon_sell_price = 60000,
+        fish_icon_width = 64,
+        fish_icon_height = 64,
+        minigame = {
+            bar_width = 60,
+            bar_height = 300,
+            bar_levels = 4,
+            gravity = 200,
+            rod_speed = 300,
+            catch_time = 5.0,
+            catch_range = 40,
+            progress_start = 0.5,
+            perfect_alignment_bonus = 0.3,
+            night_fish_catch_denominator = 90
+        }
     },
     hunger = {
         max = 100,

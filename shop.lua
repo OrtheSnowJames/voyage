@@ -605,17 +605,20 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
     -- crew section (top center)
     suit.layout:reset(grid_start_x + section_width + padding, top_margin)
     suit.Label("Crew Members", {align = "center"}, suit.layout:row(section_width, 30))
-    local hire_cost = get_crew_hire_cost(player_ship.men)
+    local hire_cost = get_crew_hire_cost(player_ship.loyal_men)
     if coins >= hire_cost then
         if suit.Button("Hire 1 Man (" .. hire_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
             coins = coins - hire_cost
             player_ship.men = player_ship.men + 1
+            player_ship.loyal_men = player_ship.loyal_men + 1 -- men we get from the shop are "loyal", meaning they can be sold
         end
     else
         suit.Label("Need " .. hire_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
     end
     suit.Label("Current Crew: " .. player_ship.men, {align = "center"}, suit.layout:row(section_width, 30))
-    
+    suit.Label("Current Loyal Crew: " .. player_ship.loyal_men, {align = "center"}, suit.layout:row(section_width, 30))
+    suit.Label("Current Crew From Enemies: " .. (player_ship.men - player_ship.loyal_men), {align = "center"}, suit.layout:row(section_width, 30))
+
     -- sword section (top right)
     suit.layout:reset(grid_start_x + (section_width + padding) * 2, top_margin)
     suit.Label("Sword", {align = "center"}, suit.layout:row(section_width, 30))

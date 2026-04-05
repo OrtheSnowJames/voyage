@@ -5,6 +5,9 @@ local FISHING_LEVEL = constants.fishing_level
 local FISH_VALUE_OFFSET = constants.fish.value_offset or 0
 local GOLD_STURGEON_VALUE = constants.fish.gold_sturgeon_value or 100000
 local NIGHT_FISH_VALUE_MULTIPLIER = constants.fish.night_fish_value_multiplier or 1000
+local FISH_ICON_WIDTH = constants.fish.fish_icon_width or 64
+local FISH_ICON_HEIGHT = constants.fish.fish_icon_height or 64
+local MINIGAME_CONFIG = constants.fish.minigame or {}
 
 local fish = {
     "Bluegill", "Crappie", "Yellow Perch", "Redfin Pickerel", "Bullhead Catfish",
@@ -32,20 +35,21 @@ local rods = {
 local corruption_level = 0
 
 local fish_icon = love.graphics.newImage("assets/fish-icon.png")
-local fish_icon_width = 64
-local fish_icon_height = 64
+local fish_icon_width = FISH_ICON_WIDTH
+local fish_icon_height = FISH_ICON_HEIGHT
 
-local BAR_WIDTH = 60
-local BAR_HEIGHT = 300
-local BAR_LEVELS = 4
+local BAR_WIDTH = MINIGAME_CONFIG.bar_width or 60
+local BAR_HEIGHT = MINIGAME_CONFIG.bar_height or 300
+local BAR_LEVELS = MINIGAME_CONFIG.bar_levels or 4
 local LEVEL_HEIGHT = BAR_HEIGHT / BAR_LEVELS
 
-local GRAVITY = 200
-local ROD_SPEED = 300
-local CATCH_TIME = 5.0
-local CATCH_RANGE = 40
-local PROGRESS_START = 0.5
-local PERFECT_ALIGNMENT_BONUS = 0.3
+local GRAVITY = MINIGAME_CONFIG.gravity or 200
+local ROD_SPEED = MINIGAME_CONFIG.rod_speed or 300
+local CATCH_TIME = MINIGAME_CONFIG.catch_time or 5.0
+local CATCH_RANGE = MINIGAME_CONFIG.catch_range or 40
+local PROGRESS_START = MINIGAME_CONFIG.progress_start or 0.5
+local PERFECT_ALIGNMENT_BONUS = MINIGAME_CONFIG.perfect_alignment_bonus or 0.3
+local NIGHT_FISH_CATCH_DENOMINATOR = MINIGAME_CONFIG.night_fish_catch_denominator or 90
 
 local minigame_state = {
     is_active = false,
@@ -73,6 +77,7 @@ local minigame_state = {
     time_in_perfect = 0,
     time_in_catch = 0,
     time_outside_catch = 0
+    ,scoring_time = 0
 }
 
 local minigame = {}
@@ -320,6 +325,7 @@ function minigame.start_fishing(available_fish, rod_level, depth_level, water_co
     minigame_state.time_in_perfect = 0
     minigame_state.time_in_catch = 0
     minigame_state.time_outside_catch = 0
+    minigame_state.scoring_time = 0
 end
 
 function minigame.update(dt)
@@ -375,6 +381,7 @@ function minigame.update(dt)
     local is_near_fish = distance_to_fish <= CATCH_RANGE
 
     if is_near_fish then
+        minigame_state.scoring_time = minigame_state.scoring_time + dt
         local accuracy_multiplier = 1.0
 
         if distance_to_fish <= 5 then
@@ -408,24 +415,41 @@ function minigame.determine_final_fish(quality_score)
         return "Bluegill"
     end
 
-    if quality_score >= 180 then
-        return available_fish[#available_fish]
-    elseif quality_score >= 140 then
-        local current_index = math.random(1, #available_fish)
-        return available_fish[math.min(current_index + 1, #available_fish)]
-    elseif quality_score >= 100 then
-        local upper_half = math.ceil(#available_fish / 2)
-        return available_fish[math.random(upper_half, #available_fish)]
-    elseif quality_score >= 60 then
-        return available_fish[math.ceil(#available_fish / 2)]
-    elseif quality_score >= 30 then
-        return available_fish[math.random(1, math.max(1, math.floor(#available_fish / 2)))]
-    else
-        if quality_score < 0 then
-            return "Bluegill"
+    local function pick_for_quality(pool)
+        if quality_score >= 180 then
+            return pool[#pool]
+        elseif quality_score >= 140 then
+            local current_index = math.random(1, #pool)
+            return pool[math.min(current_index + 1, #pool)]
+        elseif quality_score >= 100 then
+            local upper_half = math.ceil(#pool / 2)
+            return pool[math.random(upper_half, #pool)]
+        elseif quality_score >= 60 then
+            return pool[math.ceil(#pool / 2)]
+        elseif quality_score >= 30 then
+            return pool[math.random(1, math.max(1, math.floor(#pool / 2)))]
+        else
+            if quality_score < 0 then
+                return "Bluegill"
+            end
+            return pool[math.max(1, math.floor(#pool / 3))]
         end
-        return available_fish[math.max(1, math.floor(#available_fish / 3))]
     end
+
+    local candidate = pick_for_quality(available_fish)
+    if fishing.is_night_fish(candidate) and math.random(1, NIGHT_FISH_CATCH_DENOMINATOR) ~= 1 then
+        local non_night = {}
+        for _, fish_name in ipairs(available_fish) do
+            if not fishing.is_night_fish(fish_name) then
+                table.insert(non_night, fish_name)
+            end
+        end
+        if #non_night > 0 then
+            return pick_for_quality(non_night)
+        end
+    end
+
+    return candidate
 end
 
 function minigame.complete_fishing()
@@ -435,9 +459,9 @@ function minigame.complete_fishing()
         quality_score = quality_score + 10
     end
 
-    local total_time = math.max(0.0001, minigame_state.total_time)
-    local perfect_percentage = (minigame_state.time_in_perfect / total_time) * 100
-    local catch_percentage = (minigame_state.time_in_catch / total_time) * 100
+    local scoring_time = math.max(0.0001, minigame_state.scoring_time)
+    local perfect_percentage = (minigame_state.time_in_perfect / scoring_time) * 100
+    local catch_percentage = (minigame_state.time_in_catch / scoring_time) * 100
 
     if perfect_percentage >= 80 then
         quality_score = quality_score + 50
@@ -449,7 +473,7 @@ function minigame.complete_fishing()
         quality_score = quality_score - 20
     end
 
-    local time_bonus = math.max(0, 80 - minigame_state.total_time)
+    local time_bonus = math.max(0, 80 - minigame_state.scoring_time)
     quality_score = quality_score + time_bonus
     quality_score = quality_score - (minigame_state.touches * 15)
 
