@@ -91,12 +91,16 @@ function shaders.create()
         float wave_total_with_ripples = wave_total + total_ripple_displacement * 0.35;
 
         // Add color variation based on waves
-        final_color += vec(wave_total_with_ripples * 0.05);
+        final_color += vec(
+            wave_total_with_ripples * 0.05,
+            wave_total_with_ripples * 0.05,
+            wave_total_with_ripples * 0.05
+        );
 
         // Specular highlights on wave crests
         float specular = pow(noise(uv * vec2(10.0, 5.0) - vec2(time * 0.12, time * 0.08)), 18.0);
         specular *= smoothstep(0.4, 0.7, wave_total_with_ripples); // Highlights on crests
-        final_color += vec3(1.0) * specular * 0.6;
+        final_color += vec3(1.0, 1.0, 1.0) * specular * 0.6;
 
         // Foam near the shore
         float dist_to_shore = world_y - (shoreY + 40.0); // Add offset to bring foam down
