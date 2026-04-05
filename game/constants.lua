@@ -64,9 +64,9 @@ local constants = {
             shop_target_cycles_base = 4,
             shop_target_cycles_step = 0.9,
 
-            crew_start_cost = 8,
-            crew_linear_cost = 6,
-            crew_quadratic_cost = 0.6,
+            crew_start_cost = 15,
+            crew_linear_cost = 10,
+            crew_quadratic_cost = 1.2,
 
             sword_base = 11,
             sword_growth = 1.7,
