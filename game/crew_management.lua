@@ -169,4 +169,8 @@ function crew_management.draw_overlay(state)
 
 end
 
+function crew_management.is_open()
+    return panel_open
+end
+
 return crew_management

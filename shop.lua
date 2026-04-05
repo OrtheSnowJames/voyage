@@ -24,6 +24,7 @@ local inventory_state = {
 }
 
 local main_shop_scroll = scrolling.new()
+local shop_reopen_requires_exit = false
 
 -- port-a-shop configuration
 local SHOP_SPACING = constants.fishing_level  -- distance between shops/levels
@@ -317,7 +318,11 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
     
     -- check if player is in range of any shop
     local shop_active = check_shop_interaction(player_ship.x, player_ship.y, shopkeeper)
-    if shop_active and gamestate.get() == GameType.VOYAGE then
+    if not shop_active then
+        shop_reopen_requires_exit = false
+    end
+
+    if shop_active and gamestate.get() == GameType.VOYAGE and not shop_reopen_requires_exit then
         gamestate.set(GameType.SHOP)
     elseif not shop_active and gamestate.get():find(GameType.SHOP, 1, true) then
         gamestate.set(GameType.VOYAGE)
@@ -339,6 +344,14 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
     -- get window dimensions
     local window_width = size.CANVAS_WIDTH
     local window_height = size.CANVAS_HEIGHT
+
+    -- close shop button: exit shop and require leaving interaction range before reopen
+    if suit.Button("Leave Shop", {id = "leave_shop"}, window_width - 132, 10, 122, 30).hit then
+        gamestate.set(GameType.VOYAGE)
+        shop_reopen_requires_exit = true
+        scrolling.stop_drag(main_shop_scroll)
+        return
+    end
 
     if gamestate.get() ~= GameType.SHOP then
         scrolling.stop_drag(main_shop_scroll)
@@ -887,6 +900,7 @@ function shop.reset()
     inventory_state.selected_fish = nil
     inventory_state.filtered_fish = {}
     scrolling.reset(main_shop_scroll)
+    shop_reopen_requires_exit = false
 end
 
 -- get port-a-shops data for saving

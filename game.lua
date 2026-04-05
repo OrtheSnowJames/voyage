@@ -744,11 +744,17 @@ end
 
 -- handle mobile button press
 local function handle_mobile_button_press(x, y)
+    if gamestate.get():find(GameType.SHOP, 1, true) or (crew_management.is_open and crew_management.is_open()) then
+        return false
+    end
     return mobile_controls_steps.handle_press(mobile_controls, x, y)
 end
 
 -- handle mobile button release
 local function handle_mobile_button_release(x, y)
+    if gamestate.get():find(GameType.SHOP, 1, true) or (crew_management.is_open and crew_management.is_open()) then
+        return false
+    end
     return mobile_controls_steps.handle_release(mobile_controls, x, y)
 end
 
@@ -793,6 +799,12 @@ function game.update(dt)
     alert.update(dt)
     detect_cheating()
     update_steps.sleep_fade_state(dt, state)
+
+    if gamestate.get():find(GameType.SHOP, 1, true) or (crew_management.is_open and crew_management.is_open()) then
+        for _, button in pairs(mobile_controls.buttons) do
+            button.pressed = false
+        end
+    end
 
     if update_steps.handle_back_to_menu_button(state) then
         return GameType.MENU

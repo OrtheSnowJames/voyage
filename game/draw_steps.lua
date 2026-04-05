@@ -533,12 +533,14 @@ end
 
 function draw_steps.draw_final_ui(state)
     local combat_state = state.combat.state.combat
+    local in_shop = state.system.gamestate.get():find("shop", 1, true)
+    local crew_panel_open = crew_management.is_open and crew_management.is_open()
     if combat_state.defeat_flash and combat_state.defeat_flash.active then
         love.graphics.setColor(1, 1, 1, combat_state.defeat_flash.alpha)
         love.graphics.rectangle("fill", 0, 0, state.system.size.CANVAS_WIDTH, state.system.size.CANVAS_HEIGHT)
     end
 
-    if state.ui.mobile.enabled then
+    if state.ui.mobile.enabled and not in_shop and not crew_panel_open then -- hide mobile button
         state.actions.draw_mobile_controls()
     end
 
