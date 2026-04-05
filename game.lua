@@ -786,10 +786,11 @@ function game.keypressed(key)
 end
 
 function game.update(dt)
-    morningtext.update(dt)
-    alert.update(dt)
     force_corruption_sleep_if_needed()
     update_steps.day_night_cycle(dt, state)
+    morningtext.observe_time(get_time_of_day_hours())
+    morningtext.update(dt)
+    alert.update(dt)
     detect_cheating()
     update_steps.sleep_fade_state(dt, state)
 
