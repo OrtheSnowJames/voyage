@@ -22,9 +22,16 @@ local canvas = nil
 local CANVAS_WIDTH = size.CANVAS_WIDTH
 local CANVAS_HEIGHT = size.CANVAS_HEIGHT
 
-function love.load()
-    -- create the fixed-size canvas
+local function recreate_canvas(width, height)
+    size.setDimensions(width, height)
+    CANVAS_WIDTH = size.CANVAS_WIDTH
+    CANVAS_HEIGHT = size.CANVAS_HEIGHT
     canvas = love.graphics.newCanvas(CANVAS_WIDTH, CANVAS_HEIGHT)
+end
+
+function love.load()
+    local window_width, window_height = love.graphics.getDimensions()
+    recreate_canvas(window_width, window_height)
     math.randomseed(os.time())
 
     gamestate.set(GameType.MENU)
@@ -58,7 +65,7 @@ function love.draw()
     canvas:setFilter("nearest", "nearest")
     love.graphics.clear()
     
-    -- draw everything to the canvas at fixed 800x600 resolution
+    -- draw everything to the current canvas resolution
     if game_states[gamestate.get()] then
         game.draw()
     elseif gamestate.get() == GameType.MENU then
@@ -68,19 +75,14 @@ function love.draw()
     -- reset canvas and draw it scaled to window size
     love.graphics.setCanvas()
     
-    -- calculate scaling to fit the canvas in the window
+    -- draw canvas to the window; scale should usually be 1:1 since we recreate on resize
     local window_width = love.graphics.getWidth()
     local window_height = love.graphics.getHeight()
     local scale_x = window_width / CANVAS_WIDTH
     local scale_y = window_height / CANVAS_HEIGHT
-    local scale = math.min(scale_x, scale_y)  -- maintain aspect ratio
-    
-    -- calculate centering offset
-    local offset_x = (window_width - CANVAS_WIDTH * scale) / 2
-    local offset_y = (window_height - CANVAS_HEIGHT * scale) / 2
-    
-    -- draw the canvas scaled and centered
-    love.graphics.draw(canvas, offset_x, offset_y, 0, scale, scale)
+
+    -- draw the canvas stretched to current window size
+    love.graphics.draw(canvas, 0, 0, 0, scale_x, scale_y)
 end
 
 -- add keyboard event handler for debug toggle
@@ -147,14 +149,8 @@ end
 function love.windowToCanvas(x, y)
     local window_width = love.graphics.getWidth()
     local window_height = love.graphics.getHeight()
-    local scale_x = window_width / CANVAS_WIDTH
-    local scale_y = window_height / CANVAS_HEIGHT
-    local scale = math.min(scale_x, scale_y)
-    local offset_x = (window_width - CANVAS_WIDTH * scale) / 2
-    local offset_y = (window_height - CANVAS_HEIGHT * scale) / 2
-    
-    local canvas_x = (x - offset_x) / scale
-    local canvas_y = (y - offset_y) / scale
+    local canvas_x = x * (CANVAS_WIDTH / math.max(1, window_width))
+    local canvas_y = y * (CANVAS_HEIGHT / math.max(1, window_height))
     
     return canvas_x, canvas_y
 end
@@ -165,6 +161,5 @@ end
 
 -- handle window resize
 function love.resize(w, h)
-    -- [rainbow frog]
-    -- canvas system automatically handles resizing since we scale on every draw
+    recreate_canvas(w, h)
 end

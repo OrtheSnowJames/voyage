@@ -13,15 +13,22 @@ local ACTION_GAP = 120
 local ACTION_ROW_Y = 320
 local ACTION_STACK_GAP = 12
 
-local function get_layout(size)
+local function get_layout(size, mobile)
     local center_x = math.floor(size.CANVAS_WIDTH / 2)
     local left_x = math.floor(center_x - ACTION_GAP - ACTION_WIDTH)
     local right_x = math.floor(center_x + ACTION_GAP)
+    local toggle_x = size.CANVAS_WIDTH - TOGGLE_WIDTH - 12
+    local toggle_y = size.CANVAS_HEIGHT - TOGGLE_HEIGHT - 12
+
+    if mobile and mobile.enabled then
+        toggle_y = size.CANVAS_HEIGHT - mobile.button_size - mobile.button_spacing - TOGGLE_HEIGHT - 12
+        toggle_y = math.max(12, toggle_y)
+    end
 
     return {
         toggle = {
-            x = 12,
-            y = size.CANVAS_HEIGHT - TOGGLE_HEIGHT - 12,
+            x = toggle_x,
+            y = toggle_y,
             width = TOGGLE_WIDTH,
             height = TOGGLE_HEIGHT
         },
@@ -59,7 +66,7 @@ function crew_management.handle_buttons(state)
     end
 
     local suit = state.ui.suit
-    local layout = get_layout(state.system.size)
+    local layout = get_layout(state.system.size, state.ui.mobile)
 
     local toggle_label = panel_open and "Close Crew" or "Crew"
     if suit.Button(toggle_label, {id = "crew_panel_toggle"}, layout.toggle.x, layout.toggle.y, layout.toggle.width, layout.toggle.height).hit then
@@ -119,7 +126,7 @@ function crew_management.draw_overlay(state)
     love.graphics.setColor(0, 0, 0, 0.82)
     love.graphics.rectangle("fill", 0, 0, state.system.size.CANVAS_WIDTH, state.system.size.CANVAS_HEIGHT)
 
-    local layout = get_layout(state.system.size)
+    local layout = get_layout(state.system.size, state.ui.mobile)
     local font = love.graphics.getFont()
 
     love.graphics.setColor(1, 1, 1, 1)
