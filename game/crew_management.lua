@@ -10,20 +10,34 @@ local TOGGLE_HEIGHT = 30
 local ACTION_WIDTH = 220
 local ACTION_HEIGHT = 36
 local ACTION_GAP = 120
-local ACTION_ROW_Y = 320
+local ACTION_ROW_DEFAULT_Y = 320
 local ACTION_STACK_GAP = 12
+local TITLE_TOP_PADDING = 14
+local TITLE_TO_ACTION_MIN_GAP = 15
+local TITLE_TO_ACTION_DEFAULT_GAP = 110
+local ACTION_BOTTOM_PADDING = 20
 
 local function get_layout(size, mobile)
+    local font = love.graphics.getFont()
+    local font_height = font and font:getHeight() or 14
     local center_x = math.floor(size.CANVAS_WIDTH / 2)
     local left_x = math.floor(center_x - ACTION_GAP - ACTION_WIDTH)
     local right_x = math.floor(center_x + ACTION_GAP)
     local toggle_x = size.CANVAS_WIDTH - TOGGLE_WIDTH - 12
     local toggle_y = size.CANVAS_HEIGHT - TOGGLE_HEIGHT - 12
+    local title_y = TITLE_TOP_PADDING
 
     if mobile and mobile.enabled then
         toggle_y = size.CANVAS_HEIGHT - mobile.button_size - mobile.button_spacing - TOGGLE_HEIGHT - 12
         toggle_y = math.max(12, toggle_y)
     end
+
+    local action_block_height = (ACTION_HEIGHT * 2) + ACTION_STACK_GAP
+    local desired_row_y = math.max(ACTION_ROW_DEFAULT_Y, title_y + font_height + TITLE_TO_ACTION_DEFAULT_GAP)
+    local min_row_y = title_y + font_height + TITLE_TO_ACTION_MIN_GAP
+    local max_row_y = size.CANVAS_HEIGHT - ACTION_BOTTOM_PADDING - action_block_height
+    local action_row_y = math.min(desired_row_y, max_row_y)
+    action_row_y = math.max(action_row_y, min_row_y)
 
     return {
         toggle = {
@@ -34,23 +48,23 @@ local function get_layout(size, mobile)
         },
         title = {
             x = center_x,
-            y = 140
+            y = title_y
         },
         feed = {
             x = left_x,
-            y = ACTION_ROW_Y,
+            y = action_row_y,
             width = ACTION_WIDTH,
             height = ACTION_HEIGHT
         },
         feed_all = {
             x = left_x,
-            y = ACTION_ROW_Y + ACTION_HEIGHT + ACTION_STACK_GAP,
+            y = action_row_y + ACTION_HEIGHT + ACTION_STACK_GAP,
             width = ACTION_WIDTH,
             height = ACTION_HEIGHT
         },
         right_slot = {
             x = right_x,
-            y = ACTION_ROW_Y,
+            y = action_row_y,
             width = ACTION_WIDTH,
             height = ACTION_HEIGHT
         }

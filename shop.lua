@@ -3,6 +3,7 @@ local suit = require "SUIT"
 local fishing = require("game.fishing")
 local combat = require("game.combat")  -- add combat module
 local size = require("game.size")
+local scrolling = require("game.scrolling")
 local GameType = require("game.gametypes")
 local constants = require("game.constants")
 
@@ -21,6 +22,8 @@ local inventory_state = {
     filtered_fish = {},
     scroll_offset = 0
 }
+
+local main_shop_scroll = scrolling.new()
 
 -- port-a-shop configuration
 local SHOP_SPACING = constants.fishing_level  -- distance between shops/levels
@@ -320,7 +323,10 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
         gamestate.set(GameType.VOYAGE)
     end
     
-    if not gamestate.get():find(GameType.SHOP, 1, true) then return end
+    if not gamestate.get():find(GameType.SHOP, 1, true) then
+        scrolling.stop_drag(main_shop_scroll)
+        return
+    end
     
     -- update message timer
     if message_timer > 0 then
@@ -333,6 +339,10 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
     -- get window dimensions
     local window_width = size.CANVAS_WIDTH
     local window_height = size.CANVAS_HEIGHT
+
+    if gamestate.get() ~= GameType.SHOP then
+        scrolling.stop_drag(main_shop_scroll)
+    end
     
     if gamestate.get() == GameType.SHOP_TRANSFER then
         -- transfer interface
@@ -553,205 +563,211 @@ function shop.update(gamestate, player_ship, shopkeeper, game_config)
         
     else
         -- regular shop interface (only when inventory_state.mode == "")
-    
-    -- calculate layout dimensions
-    local section_width = 250
-    local section_height = 150
-    local padding = 30
-    local top_margin = 100
-    
-    -- calculate grid layout
-    local grid_width = section_width * 3 + padding * 2  -- 3 columns with 2 paddings between
-    local grid_start_x = (window_width - grid_width) / 2  -- center the grid horizontally
-    
-    -- shop title (centered at top)
-    local title_width = 200
-    suit.layout:reset((window_width - title_width) / 2, padding)
-    suit.Label("SHOP", {align = "center"}, suit.layout:row(title_width, 30))
-    
-    -- display current coins (centered below title)
-    suit.layout:reset((window_width - title_width) / 2, padding + 40)
-    suit.Label("Coins: " .. string.format("%.1f", coins), {align = "center"}, suit.layout:row(title_width, 30))
-    
-    -- first row
-    
-    -- fish section (top left)
-    suit.layout:reset(grid_start_x, top_margin)
-    suit.Label("Fish", {align = "center"}, suit.layout:row(section_width, 30))
-    local button_text = #player_ship.caught_fish > 0 and "Sell All Fish (" .. #player_ship.caught_fish .. ")" or "Sell All Fish (none)"
-    if suit.Button(button_text, suit.layout:row(section_width, 30)).hit then
-        if #player_ship.caught_fish > 0 then
-            local total = 0
-            for _, fish in ipairs(player_ship.caught_fish) do
-                if fish == "Gold Sturgeon" then
-                    total = total + GOLD_STURGEON_SELL_PRICE
-                else
-                    local fish_value = fishing.get_fish_value(fish)
-                    total = total + (fish_value * 0.6)
-                end
-            end
-            coins = coins + total
-            player_ship.caught_fish = {}
-            print("Sold fish for " .. total .. " coins!")
-        else
-            show_no_fish_message = true
-            message_timer = MESSAGE_DURATION
-        end
-    end
-    if show_no_fish_message then
-        suit.Label("No fish to sell!", {align = "center"}, suit.layout:row(section_width, 20))
-    end
-    
-    -- crew section (top center)
-    suit.layout:reset(grid_start_x + section_width + padding, top_margin)
-    suit.Label("Crew Members", {align = "center"}, suit.layout:row(section_width, 30))
-    local hire_cost = get_crew_hire_cost(player_ship.loyal_men)
-    if coins >= hire_cost then
-        if suit.Button("Hire 1 Man (" .. hire_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
-            coins = coins - hire_cost
-            player_ship.men = player_ship.men + 1
-            player_ship.loyal_men = player_ship.loyal_men + 1 -- men we get from the shop are "loyal", meaning they can be sold
-        end
-    else
-        suit.Label("Need " .. hire_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
-    end
-    suit.Label("Current Crew: " .. player_ship.men, {align = "center"}, suit.layout:row(section_width, 30))
-    suit.Label("Current Loyal Crew: " .. player_ship.loyal_men, {align = "center"}, suit.layout:row(section_width, 30))
-    suit.Label("Current Crew From Enemies: " .. (player_ship.men - player_ship.loyal_men), {align = "center"}, suit.layout:row(section_width, 30))
+        local section_width = 250
+        local section_height = 150
+        local padding = 30
+        local top_margin = 100
+        local title_width = 200
+        local row2_y = top_margin + section_height + padding
+        local row3_y = row2_y + section_height + padding
+        local content_height = row3_y + section_height + padding
 
-    -- sword section (top right)
-    suit.layout:reset(grid_start_x + (section_width + padding) * 2, top_margin)
-    suit.Label("Sword", {align = "center"}, suit.layout:row(section_width, 30))
-    local sword_cost = get_sword_upgrade_cost(player_ship.sword)
-    local current_level = combat.get_sword_level(player_ship.sword)
-    if coins >= sword_cost then
-        if suit.Button("Upgrade Sword (" .. sword_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
-            coins = coins - sword_cost
-            player_ship.sword = combat.get_sword_name(current_level + 1)
-            print("Upgraded sword to: " .. player_ship.sword)
+        scrolling.update(main_shop_scroll, {
+            viewport_x = 0,
+            viewport_y = 0,
+            viewport_width = window_width,
+            viewport_height = window_height,
+            content_height = content_height,
+            reserve_scrollbar_space = true
+        })
+
+        local scroll_y = scrolling.get_offset_y(main_shop_scroll, true)
+        local function sy(y)
+            return y + scroll_y
         end
-    else
-        suit.Label("Need " .. sword_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
-    end
-    suit.Label("Current: " .. player_ship.sword, {align = "center"}, suit.layout:row(section_width, 30))
-    
-    -- second row
-    local row2_y = top_margin + section_height + padding
-    
-    -- rod section (bottom left)
-    suit.layout:reset(grid_start_x, row2_y)
-    suit.Label("Rod", {align = "center"}, suit.layout:row(section_width, 30))
-    local rod_cost = get_rod_upgrade_cost(player_ship.rod)
-    local current_rod_level = fishing.get_rod_level(player_ship.rod)
-    if coins >= rod_cost then
-        if suit.Button("Upgrade Rod (" .. rod_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
-            coins = coins - rod_cost
-            player_ship.rod = fishing.get_rod_name(current_rod_level + 1)
-            print("Upgraded rod to: " .. player_ship.rod)
+
+        local grid_width = section_width * 3 + padding * 2
+        local grid_start_x = main_shop_scroll.viewport.x + ((main_shop_scroll.viewport.w - grid_width) / 2)
+
+        -- shop title (centered at top)
+        suit.layout:reset(main_shop_scroll.viewport.x + ((main_shop_scroll.viewport.w - title_width) / 2), sy(padding))
+        suit.Label("SHOP", {align = "center"}, suit.layout:row(title_width, 30))
+
+        -- display current coins (centered below title)
+        suit.layout:reset(main_shop_scroll.viewport.x + ((main_shop_scroll.viewport.w - title_width) / 2), sy(padding + 40))
+        suit.Label("Coins: " .. string.format("%.1f", coins), {align = "center"}, suit.layout:row(title_width, 30))
+
+        -- fish section (top left)
+        suit.layout:reset(grid_start_x, sy(top_margin))
+        suit.Label("Fish", {align = "center"}, suit.layout:row(section_width, 30))
+        local button_text = #player_ship.caught_fish > 0 and "Sell All Fish (" .. #player_ship.caught_fish .. ")" or "Sell All Fish (none)"
+        if suit.Button(button_text, suit.layout:row(section_width, 30)).hit then
+            if #player_ship.caught_fish > 0 then
+                local total = 0
+                for _, fish in ipairs(player_ship.caught_fish) do
+                    if fish == "Gold Sturgeon" then
+                        total = total + GOLD_STURGEON_SELL_PRICE
+                    else
+                        local fish_value = fishing.get_fish_value(fish)
+                        total = total + (fish_value * 0.6)
+                    end
+                end
+                coins = coins + total
+                player_ship.caught_fish = {}
+                print("Sold fish for " .. total .. " coins!")
+            else
+                show_no_fish_message = true
+                message_timer = MESSAGE_DURATION
+            end
         end
-    else
-        suit.Label("Need " .. rod_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
-    end
-    suit.Label("Current: " .. player_ship.rod, {align = "center"}, suit.layout:row(section_width, 30))
-    
-    -- port-a-shop section (bottom center)
-    suit.layout:reset(grid_start_x + section_width + padding, row2_y)
-    suit.Label("Port-a-Shops", {align = "center"}, suit.layout:row(section_width, 30))
-    local next_shop_cost = get_next_shop_cost()
-    if coins >= next_shop_cost then
-        if suit.Button("Buy Port-a-Shop (" .. next_shop_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
-            coins = coins - next_shop_cost
-            add_port_a_shop()
+        if show_no_fish_message then
+            suit.Label("No fish to sell!", {align = "center"}, suit.layout:row(section_width, 20))
         end
-    else
-        suit.Label("Need " .. next_shop_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
-    end
-    suit.Label("Owned: " .. #port_a_shops, {align = "center"}, suit.layout:row(section_width, 30))
-    
-    -- speed upgrade section (bottom right)
-    suit.layout:reset(grid_start_x + (section_width + padding) * 2, row2_y)
-    suit.Label("Ship Parts", {align = "center"}, suit.layout:row(section_width, 30))
-    local speed_cost = get_speed_upgrade_cost(player_ship.max_speed)
-    if coins >= speed_cost then
-        if suit.Button("Upgrade Speed (" .. speed_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
-            coins = coins - speed_cost
-            player_ship.max_speed = player_ship.max_speed + 20
-            player_ship.acceleration = player_ship.acceleration + SHIP_PARTS_ACCEL_BONUS
-            print("Upgraded speed to: " .. player_ship.max_speed .. " and acceleration to: " .. player_ship.acceleration)
-        end
-    else
-        suit.Label("Need " .. speed_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
-    end
-    suit.Label(
-        "Speed: " .. player_ship.max_speed .. " | Accel: " .. player_ship.acceleration,
-        {align = "center"},
-        suit.layout:row(section_width, 30)
-    )
-    
-    -- third row
-    local row3_y = row2_y + section_height + padding
-    
-    -- cooldown upgrade section (third row left)
-    suit.layout:reset(grid_start_x, row3_y)
-    suit.Label("Fishing Cooldown", {align = "center"}, suit.layout:row(section_width, 30))
-    local cooldown_cost = get_cooldown_upgrade_cost(game_config.fishing_cooldown)
-    if game_config.fishing_cooldown > 1.0 then  -- minimum cooldown of 1 second
-        if coins >= cooldown_cost then
-            if suit.Button("Reduce Cooldown (" .. cooldown_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
-                coins = coins - cooldown_cost
-                game_config.fishing_cooldown = math.max(1.0, game_config.fishing_cooldown - 0.1)  -- reduce by 0.1s, min 1.0s
-                print("Reduced fishing cooldown to: " .. game_config.fishing_cooldown .. "s")
+
+        -- crew section (top center)
+        suit.layout:reset(grid_start_x + section_width + padding, sy(top_margin))
+        suit.Label("Crew Members", {align = "center"}, suit.layout:row(section_width, 30))
+        local hire_cost = get_crew_hire_cost(player_ship.loyal_men)
+        if coins >= hire_cost then
+            if suit.Button("Hire 1 Man (" .. hire_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
+                coins = coins - hire_cost
+                player_ship.men = player_ship.men + 1
+                player_ship.loyal_men = player_ship.loyal_men + 1 -- men we get from the shop are "loyal", meaning they can be sold
             end
         else
-            suit.Label("Need " .. cooldown_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
+            suit.Label("Need " .. hire_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
         end
-    else
-        suit.Label("Cooldown fully upgraded", {align = "center"}, suit.layout:row(section_width, 30))
-    end
-    suit.Label("Current: " .. string.format("%.1f", game_config.fishing_cooldown) .. " seconds", {align = "center"}, suit.layout:row(section_width, 30))
-    
-    -- healing section (third row center)
-    suit.layout:reset(grid_start_x + section_width + padding, row3_y)
-    suit.Label("Recovery Bay", {align = "center"}, suit.layout:row(section_width, 30))
-    local healing_cost = player_ship.fainted_men * 10
-    if player_ship.fainted_men > 0 then
-        if coins >= healing_cost then
-            if suit.Button("Recover Enemy Crew (" .. healing_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
-                coins = coins - healing_cost
-                player_ship.men = player_ship.men + player_ship.fainted_men
-                print("Recovered " .. player_ship.fainted_men .. " enemy crew member(s)!")
-                player_ship.fainted_men = 0
+        suit.Label("Current Crew: " .. player_ship.men, {align = "center"}, suit.layout:row(section_width, 30))
+        suit.Label("Current Loyal Crew: " .. player_ship.loyal_men, {align = "center"}, suit.layout:row(section_width, 30))
+        suit.Label("Current Crew From Enemies: " .. (player_ship.men - player_ship.loyal_men), {align = "center"}, suit.layout:row(section_width, 30))
+
+        -- sword section (top right)
+        suit.layout:reset(grid_start_x + (section_width + padding) * 2, sy(top_margin))
+        suit.Label("Sword", {align = "center"}, suit.layout:row(section_width, 30))
+        local sword_cost = get_sword_upgrade_cost(player_ship.sword)
+        local current_level = combat.get_sword_level(player_ship.sword)
+        if coins >= sword_cost then
+            if suit.Button("Upgrade Sword (" .. sword_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
+                coins = coins - sword_cost
+                player_ship.sword = combat.get_sword_name(current_level + 1)
+                print("Upgraded sword to: " .. player_ship.sword)
             end
         else
-            suit.Label("Need " .. healing_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
+            suit.Label("Need " .. sword_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
         end
-    else
-        suit.Label("No fainted enemy crew", {align = "center"}, suit.layout:row(section_width, 30))
-    end
-    suit.Label(
-        string.format("Enemy Fainted: %d/%d", player_ship.fainted_men, RECOVERY_BAY_MAX),
-        {align = "center"},
-        suit.layout:row(section_width, 30)
-    )
-    
-    -- inventory section (third row right)
-    suit.layout:reset(grid_start_x + (section_width + padding) * 2, row3_y)
-    suit.Label("Fish Inventory", {align = "center"}, suit.layout:row(section_width, 30))
-    if suit.Button("Transfer to Inventory", suit.layout:row(section_width, 30)).hit then
-        gamestate.set(GameType.SHOP_TRANSFER)
-        inventory_state.search_text.text = ""
-        inventory_state.selected_fish = nil
-        inventory_state.scroll_offset = 0
-        -- create filtered fish list
-        inventory_state.filtered_fish = {}
-        for _, fish in ipairs(player_ship.caught_fish) do
-            table.insert(inventory_state.filtered_fish, fish)
+        suit.Label("Current: " .. player_ship.sword, {align = "center"}, suit.layout:row(section_width, 30))
+
+        -- rod section (second row left)
+        suit.layout:reset(grid_start_x, sy(row2_y))
+        suit.Label("Rod", {align = "center"}, suit.layout:row(section_width, 30))
+        local rod_cost = get_rod_upgrade_cost(player_ship.rod)
+        local current_rod_level = fishing.get_rod_level(player_ship.rod)
+        if coins >= rod_cost then
+            if suit.Button("Upgrade Rod (" .. rod_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
+                coins = coins - rod_cost
+                player_ship.rod = fishing.get_rod_name(current_rod_level + 1)
+                print("Upgraded rod to: " .. player_ship.rod)
+            end
+        else
+            suit.Label("Need " .. rod_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
         end
-    end
-    if suit.Button("View Inventory", suit.layout:row(section_width, 30)).hit then
-        gamestate.set(GameType.SHOP_VIEW_INVENTORY)
-        inventory_state.scroll_offset = 0
-    end
+        suit.Label("Current: " .. player_ship.rod, {align = "center"}, suit.layout:row(section_width, 30))
+
+        -- port-a-shop section (second row center)
+        suit.layout:reset(grid_start_x + section_width + padding, sy(row2_y))
+        suit.Label("Port-a-Shops", {align = "center"}, suit.layout:row(section_width, 30))
+        local next_shop_cost = get_next_shop_cost()
+        if coins >= next_shop_cost then
+            if suit.Button("Buy Port-a-Shop (" .. next_shop_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
+                coins = coins - next_shop_cost
+                add_port_a_shop()
+            end
+        else
+            suit.Label("Need " .. next_shop_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
+        end
+        suit.Label("Owned: " .. #port_a_shops, {align = "center"}, suit.layout:row(section_width, 30))
+
+        -- speed upgrade section (second row right)
+        suit.layout:reset(grid_start_x + (section_width + padding) * 2, sy(row2_y))
+        suit.Label("Ship Parts", {align = "center"}, suit.layout:row(section_width, 30))
+        local speed_cost = get_speed_upgrade_cost(player_ship.max_speed)
+        if coins >= speed_cost then
+            if suit.Button("Upgrade Speed (" .. speed_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
+                coins = coins - speed_cost
+                player_ship.max_speed = player_ship.max_speed + 20
+                player_ship.acceleration = player_ship.acceleration + SHIP_PARTS_ACCEL_BONUS
+                print("Upgraded speed to: " .. player_ship.max_speed .. " and acceleration to: " .. player_ship.acceleration)
+            end
+        else
+            suit.Label("Need " .. speed_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
+        end
+        suit.Label(
+            "Speed: " .. player_ship.max_speed .. " | Accel: " .. player_ship.acceleration,
+            {align = "center"},
+            suit.layout:row(section_width, 30)
+        )
+
+        -- cooldown upgrade section (third row left)
+        suit.layout:reset(grid_start_x, sy(row3_y))
+        suit.Label("Fishing Cooldown", {align = "center"}, suit.layout:row(section_width, 30))
+        local cooldown_cost = get_cooldown_upgrade_cost(game_config.fishing_cooldown)
+        if game_config.fishing_cooldown > 1.0 then  -- minimum cooldown of 1 second
+            if coins >= cooldown_cost then
+                if suit.Button("Reduce Cooldown (" .. cooldown_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
+                    coins = coins - cooldown_cost
+                    game_config.fishing_cooldown = math.max(1.0, game_config.fishing_cooldown - 0.1)  -- reduce by 0.1s, min 1.0s
+                    print("Reduced fishing cooldown to: " .. game_config.fishing_cooldown .. "s")
+                end
+            else
+                suit.Label("Need " .. cooldown_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
+            end
+        else
+            suit.Label("Cooldown fully upgraded", {align = "center"}, suit.layout:row(section_width, 30))
+        end
+        suit.Label("Current: " .. string.format("%.1f", game_config.fishing_cooldown) .. " seconds", {align = "center"}, suit.layout:row(section_width, 30))
+
+        -- healing section (third row center)
+        suit.layout:reset(grid_start_x + section_width + padding, sy(row3_y))
+        suit.Label("Recovery Bay", {align = "center"}, suit.layout:row(section_width, 30))
+        local healing_cost = player_ship.fainted_men * 10
+        if player_ship.fainted_men > 0 then
+            if coins >= healing_cost then
+                if suit.Button("Recover Enemy Crew (" .. healing_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
+                    coins = coins - healing_cost
+                    player_ship.men = player_ship.men + player_ship.fainted_men
+                    print("Recovered " .. player_ship.fainted_men .. " enemy crew member(s)!")
+                    player_ship.fainted_men = 0
+                end
+            else
+                suit.Label("Need " .. healing_cost .. " coins", {align = "center"}, suit.layout:row(section_width, 30))
+            end
+        else
+            suit.Label("No fainted enemy crew", {align = "center"}, suit.layout:row(section_width, 30))
+        end
+        suit.Label(
+            string.format("Enemy Fainted: %d/%d", player_ship.fainted_men, RECOVERY_BAY_MAX),
+            {align = "center"},
+            suit.layout:row(section_width, 30)
+        )
+
+        -- inventory section (third row right)
+        suit.layout:reset(grid_start_x + (section_width + padding) * 2, sy(row3_y))
+        suit.Label("Fish Inventory", {align = "center"}, suit.layout:row(section_width, 30))
+        if suit.Button("Transfer to Inventory", suit.layout:row(section_width, 30)).hit then
+            gamestate.set(GameType.SHOP_TRANSFER)
+            inventory_state.search_text.text = ""
+            inventory_state.selected_fish = nil
+            inventory_state.scroll_offset = 0
+            -- create filtered fish list
+            inventory_state.filtered_fish = {}
+            for _, fish in ipairs(player_ship.caught_fish) do
+                table.insert(inventory_state.filtered_fish, fish)
+            end
+        end
+        if suit.Button("View Inventory", suit.layout:row(section_width, 30)).hit then
+            gamestate.set(GameType.SHOP_VIEW_INVENTORY)
+            inventory_state.scroll_offset = 0
+        end
     
     end -- close the else block for regular shop interface
 end
@@ -843,9 +859,15 @@ function shop.draw_ui(gamestate)
         love.graphics.setColor(0, 0, 0, alpha)
         love.graphics.rectangle("fill", 0, 0, size.CANVAS_WIDTH, size.CANVAS_HEIGHT)
         love.graphics.setColor(1, 1, 1, 1)
-        
-        -- draw ui
-        suit.draw()
+
+        if gamestate.get() == GameType.SHOP then
+            scrolling.begin_clip(main_shop_scroll)
+            suit.draw()
+            scrolling.end_clip()
+            scrolling.draw(main_shop_scroll)
+        else
+            suit.draw()
+        end
     end
 end
 
@@ -864,6 +886,7 @@ function shop.reset()
     inventory_state.search_text.text = ""
     inventory_state.selected_fish = nil
     inventory_state.filtered_fish = {}
+    scrolling.reset(main_shop_scroll)
 end
 
 -- get port-a-shops data for saving
