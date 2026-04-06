@@ -15,9 +15,54 @@ set -euo pipefail
 #   macOS: Cmd+Shift+R
 #   Windows/Linux: Ctrl+F5
 #
-PORT="${1:-8000}"
+PORT="8000"
+USE_CORS_HEADERS="1"
 WEB_DIR="web"
 DEFAULT_INDEX="index_weird.html"
+
+usage() {
+  cat <<'EOF'
+Usage: ./host.sh [PORT] [--no-cors]
+       ./host.sh --port PORT [--no-cors]
+
+Options:
+  --no-cors       Disable COOP/COEP headers (Cross-Origin-Opener-Policy and
+                  Cross-Origin-Embedder-Policy).
+  -p, --port N    Set HTTP port (default: 8000).
+  -h, --help      Show this help.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-cors)
+      USE_CORS_HEADERS="0"
+      shift
+      ;;
+    -p|--port)
+      if [[ $# -lt 2 ]]; then
+        echo "error: $1 requires a port value" >&2
+        exit 1
+      fi
+      PORT="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      if [[ "$1" =~ ^[0-9]+$ ]]; then
+        PORT="$1"
+        shift
+      else
+        echo "error: unknown argument: $1" >&2
+        usage >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
 
 python3 - <<'PY'
 from pathlib import Path
@@ -58,7 +103,7 @@ if root_index.exists():
     print("synced custom index: index_weird.html -> web/index_weird.html")
 PY
 
-python3 - "$PORT" "$WEB_DIR" "$DEFAULT_INDEX" <<'PY'
+python3 - "$PORT" "$WEB_DIR" "$DEFAULT_INDEX" "$USE_CORS_HEADERS" <<'PY'
 import http.server
 import socketserver
 import sys
@@ -67,6 +112,7 @@ from pathlib import Path
 port = int(sys.argv[1])
 web_dir = sys.argv[2]
 default_index = sys.argv[3]
+use_cors_headers = sys.argv[4] == "1"
 default_index_exists = Path(web_dir, default_index).exists()
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -77,12 +123,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def end_headers(self):
-        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
-        self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
+        if use_cors_headers:
+            self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+            self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
         super().end_headers()
 
 with socketserver.TCPServer(("", port), lambda *a, **k: Handler(*a, directory=web_dir, **k)) as httpd:
     active_index = default_index if default_index_exists else "index.html"
-    print(f"Serving {web_dir}/ on http://localhost:{port} (index: {active_index})")
+    headers_mode = "COOP/COEP on" if use_cors_headers else "COOP/COEP off"
+    print(f"Serving {web_dir}/ on http://localhost:{port} (index: {active_index}, {headers_mode})")
     httpd.serve_forever()
 PY
