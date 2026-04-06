@@ -83,4 +83,5 @@ Getting love.js working was complicated to say the least.
 ## Thanks
 
 Thanks to [LÖVE](love2d.org) for making this actually possible
+
 Thanks to [love.js](https://github.com/Davidobot/love.js) for making web support possible
