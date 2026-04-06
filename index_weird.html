@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, minimum-scale=1, maximum-scale=1">
+    <title>voyage :: warped shell</title>
+    <style>
+      :root {
+        --ink: #021a2a;
+        --foam: #93c3e6;
+        --acid: #f6ff7f;
+        --hot: #ff5f8f;
+        --cold: #5de0ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        color: var(--ink);
+        font-family: "Courier New", Courier, monospace;
+        background:
+          radial-gradient(circle at 20% 10%, rgba(246, 255, 127, 0.2), transparent 35%),
+          radial-gradient(circle at 80% 20%, rgba(255, 95, 143, 0.2), transparent 35%),
+          linear-gradient(130deg, #f0b5d7 0 18%, #8ec5e8 18% 100%);
+      }
+
+      .shell {
+        width: min(1100px, 96vw);
+        margin: 10px auto;
+        padding: 12px;
+        border: 3px solid rgba(2, 26, 42, 0.45);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.12);
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25) inset;
+      }
+
+      .masthead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .masthead h1 {
+        margin: 0;
+        font-size: clamp(1.8rem, 4vw, 2.8rem);
+        letter-spacing: 0.08em;
+        text-transform: lowercase;
+      }
+
+      .badge {
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 2px dashed rgba(2, 26, 42, 0.55);
+        background: rgba(255, 255, 255, 0.35);
+        font-size: 12px;
+      }
+
+      .stage {
+        margin-top: 10px;
+        position: relative;
+        width: min(96vw, 1100px);
+        height: min(76vh, 860px);
+        min-height: 360px;
+        margin-left: auto;
+        margin-right: auto;
+        padding: 0;
+        overflow: hidden;
+        border-radius: 14px;
+        background:
+          repeating-linear-gradient(
+            -45deg,
+            rgba(2, 26, 42, 0.035) 0 10px,
+            rgba(2, 26, 42, 0.065) 10px 20px
+          );
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        border: 2px solid rgba(2, 26, 42, 0.4);
+        border-radius: 8px;
+      }
+
+      #loadingCanvas {
+        filter: saturate(1.08) contrast(0.96);
+      }
+
+      #canvas {
+        padding-right: 0;
+        border: 2px solid rgba(2, 26, 42, 0.45);
+        visibility: hidden;
+      }
+
+      #errorLog {
+        display: none;
+        width: min(96vw, 1100px);
+        margin: 10px auto 0 auto;
+        border-radius: 8px;
+        text-align: left;
+        white-space: pre-wrap;
+        padding: 10px;
+        background: rgba(20, 20, 25, 0.92);
+        color: #ff8f95;
+        border: 2px solid rgba(255, 95, 143, 0.45);
+      }
+
+      .controls {
+        margin-top: 10px;
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .controls button {
+        cursor: pointer;
+        border: 2px solid rgba(2, 26, 42, 0.5);
+        border-radius: 999px;
+        padding: 6px 12px;
+        background: linear-gradient(90deg, var(--acid), var(--cold));
+        color: #02233a;
+        font-weight: bold;
+      }
+
+      .hint {
+        margin-top: 8px;
+        font-size: 12px;
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="masthead">
+        <h1>voyage</h1>
+        <div class="badge">weird mode / stable runtime</div>
+      </div>
+      <div class="stage">
+        <canvas id="loadingCanvas" oncontextmenu="event.preventDefault()" width="800" height="600"></canvas>
+        <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+        <pre id="errorLog"></pre>
+      </div>
+      <div class="controls">
+        <button onclick="goFullScreen();">Go Fullscreen</button>
+      </div>
+      <div class="hint">Hint: hard refresh if the screen is blank</div>
+    </div>
+
+    <script type="text/javascript">
+      function goFullScreen() {
+        var canvas = document.getElementById("canvas");
+        if (canvas.requestFullScreen) canvas.requestFullScreen();
+        else if (canvas.webkitRequestFullScreen) canvas.webkitRequestFullScreen();
+        else if (canvas.mozRequestFullScreen) canvas.mozRequestFullScreen();
+      }
+
+      function FullScreenHook() {
+        var canvas = document.getElementById("canvas");
+        var stage = document.querySelector(".stage");
+        var inFullscreen = !!document.fullscreenElement;
+        var w = inFullscreen ? window.innerWidth : Math.max(1, Math.floor(stage.clientWidth));
+        var h = inFullscreen ? window.innerHeight : Math.max(1, Math.floor(stage.clientHeight));
+        canvas.width = w;
+        canvas.height = h;
+        var loadingCanvas = document.getElementById("loadingCanvas");
+        loadingCanvas.width = w;
+        loadingCanvas.height = h;
+      }
+
+      var loadingContext = document.getElementById("loadingCanvas").getContext("2d");
+      function drawLoadingText(text) {
+        var canvas = loadingContext.canvas;
+        loadingContext.fillStyle = "rgb(142, 195, 227)";
+        loadingContext.fillRect(0, 0, canvas.width, canvas.height);
+        loadingContext.font = "2em arial";
+        loadingContext.textAlign = "center";
+        loadingContext.fillStyle = "rgb(11, 86, 117)";
+        loadingContext.fillText(text, canvas.width / 2, canvas.height / 2);
+        loadingContext.fillText("Powered By Emscripten.", canvas.width / 2, canvas.height / 4);
+        loadingContext.fillText("Powered By LÖVE.", canvas.width / 2, (canvas.height / 4) * 3);
+      }
+
+      window.onload = function() { window.focus(); };
+      window.onclick = function() { window.focus(); };
+      window.addEventListener("resize", FullScreenHook);
+      document.addEventListener("fullscreenchange", FullScreenHook);
+      window.addEventListener("keydown", function(e) {
+        if ([32, 37, 38, 39, 40].indexOf(e.keyCode) > -1) {
+          e.preventDefault();
+        }
+      }, false);
+
+      var errorLog = document.getElementById("errorLog");
+      var Module = {
+        arguments: ["./"],
+        INITIAL_MEMORY: 200000000,
+        printErr: function(msg) {
+          console.error(msg);
+          errorLog.style.display = "block";
+          errorLog.textContent += String(msg) + "\n";
+        },
+        canvas: (function() {
+          var canvas = document.getElementById("canvas");
+          canvas.addEventListener("webglcontextlost", function(e) {
+            alert("WebGL context lost. You will need to reload the page.");
+            e.preventDefault();
+          }, false);
+          return canvas;
+        })(),
+        setStatus: function(text) {
+          if (text) {
+            drawLoadingText(text);
+          } else if (Module.remainingDependencies === 0) {
+            document.getElementById("loadingCanvas").style.display = "none";
+            document.getElementById("canvas").style.visibility = "visible";
+          }
+        },
+        totalDependencies: 0,
+        remainingDependencies: 0,
+        monitorRunDependencies: function(left) {
+          this.remainingDependencies = left;
+          this.totalDependencies = Math.max(this.totalDependencies, left);
+          Module.setStatus(left ? "Preparing... (" + (this.totalDependencies - left) + "/" + this.totalDependencies + ")" : "All downloads complete.");
+        }
+      };
+
+      Module.setStatus("Downloading...");
+      window.onerror = function() {
+        Module.setStatus("Exception thrown, see JavaScript console");
+        Module.setStatus = function(text) {
+          if (text) Module.printErr("[post-exception status] " + text);
+        };
+      };
+
+      function showGameCanvas() {
+        document.getElementById("loadingCanvas").style.display = "none";
+        document.getElementById("canvas").style.visibility = "visible";
+      }
+
+      var applicationLoad = function() {
+        FullScreenHook();
+        Love(Module).then(showGameCanvas);
+        setTimeout(showGameCanvas, 2000);
+      };
+    </script>
+    <script type="text/javascript" src="game.js"></script>
+    <script async type="text/javascript" src="love.js" onload="applicationLoad(this)"></script>
+  </body>
+</html>

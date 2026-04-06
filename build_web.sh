@@ -9,6 +9,8 @@ set -euo pipefail
 MEMORY="${1:-200000000}"
 TITLE="${2:-voyage}"
 OUT_DIR="web"
+CUSTOM_INDEX_SRC="index_weird.html"
+CUSTOM_INDEX_DST="$OUT_DIR/index_weird.html"
 
 # Important: do NOT pass "." directly to love.js.
 # love.js 11.4.1 treats input as a regex and "." causes empty filenames in game.js.
@@ -66,6 +68,12 @@ if print_err_needle in text:
 
 path.write_text(text, encoding="utf-8")
 PY
+
+# If a custom root-level index exists, copy it into web/ so host.sh can serve it.
+if [ -f "$CUSTOM_INDEX_SRC" ]; then
+  cp "$CUSTOM_INDEX_SRC" "$CUSTOM_INDEX_DST"
+  echo "Copied custom index: $CUSTOM_INDEX_SRC -> $CUSTOM_INDEX_DST"
+fi
 
 # Ensure the game canvas is shown even if status hooks miss the final transition.
 python3 - "$OUT_DIR/index.html" <<'PY'

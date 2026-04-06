@@ -50,6 +50,12 @@ if game_js_path.exists():
             "web/game.js is invalid: package metadata contains empty filenames.\n"
             "Rebuild web assets with ./build_web.sh (do not use `love.js . web/ ...`)."
         )
+
+root_index = Path("index_weird.html")
+web_index = Path("web/index_weird.html")
+if root_index.exists():
+    web_index.write_text(root_index.read_text(encoding="utf-8"), encoding="utf-8")
+    print("synced custom index: index_weird.html -> web/index_weird.html")
 PY
 
 python3 - "$PORT" "$WEB_DIR" "$DEFAULT_INDEX" <<'PY'
