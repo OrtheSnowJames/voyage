@@ -79,3 +79,8 @@ This project is actively evolving and being refined over time.
 I just got motivation to start working on this after 7 months somehow :)
 
 Getting love.js working was complicated to say the least.
+
+## Thanks
+
+Thanks to [LÖVE](love2d.org) for making this actually possible
+Thanks to [love.js](https://github.com/Davidobot/love.js) for making web support possible
