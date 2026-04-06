@@ -195,6 +195,7 @@ local ON_FOOT_MAX_WALK_SIDE = constants.shops.on_foot_max_walk_side or 260
 local ON_FOOT_MAX_WALK_DOWN = constants.shops.on_foot_max_walk_down or 24
 local MAIN_DOCK_WALK_HALF_WIDTH = constants.shops.main_dock_walk_half_width or 20
 local MAIN_SHOPKEEPER_SIDE_OFFSET_X = constants.shops.main_shopkeeper_side_offset_x or 42
+local MAIN_SHOPKEEPER_SHORE_OFFSET_Y = constants.shops.main_shopkeeper_shore_offset_y or 0
 
 -- port-a-shops state
 local port_a_shops = {}
@@ -220,7 +221,8 @@ local shopkeeper = shopkeeper_factory.create({
     player_ship = player_ship,
     shore_division = shore_division,
     size = size,
-    main_shopkeeper_side_offset_x = MAIN_SHOPKEEPER_SIDE_OFFSET_X
+    main_shopkeeper_side_offset_x = MAIN_SHOPKEEPER_SIDE_OFFSET_X,
+    main_shopkeeper_shore_offset_y = MAIN_SHOPKEEPER_SHORE_OFFSET_Y
 })
 state.shop.keeper = shopkeeper
 

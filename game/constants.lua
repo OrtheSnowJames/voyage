@@ -69,6 +69,7 @@ local constants = {
         on_foot_max_walk_down = 0,
         main_dock_walk_half_width = 20,
         main_shopkeeper_side_offset_x = 42,
+        main_shopkeeper_shore_offset_y = -100,
         ECON = {
             shop_base = 50,
             shop_target_cycles_base = 4,

@@ -73,6 +73,27 @@ PY
 if [ -f "$CUSTOM_INDEX_SRC" ]; then
   cp "$CUSTOM_INDEX_SRC" "$CUSTOM_INDEX_DST"
   echo "Copied custom index: $CUSTOM_INDEX_SRC -> $CUSTOM_INDEX_DST"
+
+  cat > "$OUT_DIR/index.html" <<'HTML'
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="refresh" content="0; url=./index_weird.html">
+    <title>Redirecting...</title>
+    <script>
+      (function() {
+        var target = "./index_weird.html" + window.location.search + window.location.hash;
+        window.location.replace(target);
+      })();
+    </script>
+  </head>
+  <body>
+    Redirecting to <a href="./index_weird.html">index_weird.html</a>...
+  </body>
+</html>
+HTML
+  echo "Replaced web/index.html with redirect to index_weird.html"
 fi
 
 # Ensure the game canvas is shown even if status hooks miss the final transition.

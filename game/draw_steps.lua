@@ -75,7 +75,13 @@ local function draw_on_foot_player(state, foot_x, foot_y)
     local moving = ((dx * dx) + (dy * dy)) > 0.04
 
     if moving then
-        if math.abs(dx) > math.abs(dy) then
+        local abs_dx = math.abs(dx)
+        local abs_dy = math.abs(dy)
+
+        -- Avoid diagonal flicker: when moving on both axes, always face horizontal.
+        if abs_dx > 0.01 and abs_dy > 0.01 then
+            on_foot_anim.last_dir = dx >= 0 and "right" or "left"
+        elseif abs_dx > abs_dy then
             on_foot_anim.last_dir = dx >= 0 and "right" or "left"
         else
             on_foot_anim.last_dir = dy >= 0 and "down" or "up"

@@ -117,10 +117,66 @@
       .controls {
         margin-top: 10px;
         display: flex;
+        gap: 8px;
         justify-content: flex-end;
       }
 
       .controls button {
+        cursor: pointer;
+        border: 2px solid rgba(237, 232, 216, 0.36);
+        border-radius: 999px;
+        padding: 6px 12px;
+        background: linear-gradient(90deg, var(--acid), var(--cold));
+        color: #1a1a16;
+        font-weight: bold;
+      }
+
+      .help-overlay {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 50;
+        padding: 20px;
+      }
+
+      .help-card {
+        width: min(680px, 94vw);
+        max-height: 82vh;
+        overflow-y: auto;
+        border-radius: 14px;
+        border: 2px solid rgba(237, 232, 216, 0.36);
+        background: linear-gradient(145deg, #3b3654 0%, #4b4960 45%, #65684f 100%);
+        color: #f5f0e2;
+        padding: 16px 18px;
+      }
+
+      .help-card h2 {
+        margin: 0 0 10px 0;
+      }
+
+      .help-card h3 {
+        margin: 14px 0 6px 0;
+      }
+
+      .help-card p {
+        margin: 0 0 8px 0;
+        line-height: 1.45;
+      }
+
+      .help-card ul {
+        margin: 0 0 10px 16px;
+      }
+
+      .help-actions {
+        margin-top: 10px;
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .help-actions button {
         cursor: pointer;
         border: 2px solid rgba(237, 232, 216, 0.36);
         border-radius: 999px;
@@ -148,9 +204,47 @@
         <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
         <pre id="errorLog"></pre>
       </div>
+      <div id="howToOverlay" class="help-overlay" aria-hidden="true">
+        <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="howToTitle">
+          <h2 id="howToTitle">How To Play Voyage</h2>
+
+          <h3>Core Mechs</h3>
+          <p>Fish to earn coins, buy upgrades, fight ships, and feed your crew while you push deeper.</p>
+
+          <h3>Basic Controling</h3>
+          <ul>
+            <li>Move your boat with WASD or arrow keys</li>
+            <li>Press F to fish when sailing (you can't fish near shops!)</li>
+            <li>To save, go to a shop and press the save & return button</li>
+            <li>To feed your crew, click on the crew button in the bottom right</li>
+            <li>Near docks (brown squares) and shopkeepers, press F to dock, board, or trade</li>
+            <li>On mobile, use the on-screen controls</li>
+          </ul>
+
+          <h3>Crew Rules</h3>
+          <ul>
+            <li>Crew hunger drops over time</li>
+            <li>Feed your crew from fish inventory before hunger hits zero</li>
+            <li>If too many crew are brought to easy fights, carelessness can cause great losses</li>
+          </ul>
+
+          <h3>Progression Tips</h3>
+          <ul>
+            <li>Upgrade rod first for easier fishing</li>
+            <li>Upgrade sword before big fights to reduce losses</li>
+            <li>Use shops to convert fish into coins</li>
+            <li>Beware! If you get defeated in battle, your save gets wiped as you pass away.</li>
+          </ul>
+
+          <div class="help-actions">
+            <button type="button" onclick="closeHowTo();">Close</button>
+          </div>
+        </div>
+      </div>
       <div class="controls">
+        <button onclick="openHowTo();">How To Play</button>
         <button onclick="goFullScreen();">Go Fullscreen</button>
-        <button onclick="window.location.href = 'http://waffledogz.us'">waffledogz.us</button>
+        <button onclick="redirectToWaffleDogz();">waffledogz.us</button>
       </div>
       <div class="hint">Hint: hard refresh if the screen is blank</div>
     </div>
@@ -162,6 +256,37 @@
         else if (canvas.webkitRequestFullScreen) canvas.webkitRequestFullScreen();
         else if (canvas.mozRequestFullScreen) canvas.mozRequestFullScreen();
       }
+
+      function openHowTo() {
+        var overlay = document.getElementById("howToOverlay");
+        overlay.style.display = "flex";
+        overlay.setAttribute("aria-hidden", "false");
+      }
+
+      function closeHowTo() {
+        var overlay = document.getElementById("howToOverlay");
+        overlay.style.display = "none";
+        overlay.setAttribute("aria-hidden", "true");
+      }
+
+      function redirectToWaffleDogz() {
+        window.location.href = "http://waffledogz.us";
+      }
+
+      (function installSameTabQuitRedirect() {
+        var originalWindowOpen = window.open;
+        window.open = function(url) {
+          var targetUrl = String(url || "");
+          if (targetUrl === "http://waffledogz.us" || targetUrl === "https://waffledogz.us") {
+            redirectToWaffleDogz();
+            return window;
+          }
+          if (typeof originalWindowOpen === "function") {
+            return originalWindowOpen.apply(window, arguments);
+          }
+          return null;
+        };
+      })();
 
       function FullScreenHook() {
         var canvas = document.getElementById("canvas");
@@ -198,6 +323,16 @@
           e.preventDefault();
         }
       }, false);
+      window.addEventListener("keydown", function(e) {
+        if (e.key === "Escape") {
+          closeHowTo();
+        }
+      });
+      document.getElementById("howToOverlay").addEventListener("click", function(e) {
+        if (e.target.id === "howToOverlay") {
+          closeHowTo();
+        }
+      });
 
       var errorLog = document.getElementById("errorLog");
       var Module = {

@@ -190,7 +190,8 @@ function port.create(deps)
         end
 
         local dock_x = shopkeeper.dock_x or shopkeeper.x
-        return dock_x, shopkeeper.y + DOCK_TIP_OFFSET_Y
+        local dock_base_y = shopkeeper.dock_y or shopkeeper.y
+        return dock_x, dock_base_y + DOCK_TIP_OFFSET_Y
     end
 
     local function is_boat_near_main_dock(player_ship, shopkeeper)
@@ -226,12 +227,13 @@ function port.create(deps)
         player_ship.pending_shop_interaction = false
 
         local dock_x, _ = api.get_main_dock_position(shopkeeper)
+        local dock_base_y = (shopkeeper and (shopkeeper.dock_y or shopkeeper.y)) or player_ship.y
         player_ship.on_foot_x = dock_x or player_ship.x
-        player_ship.on_foot_y = (shopkeeper and shopkeeper.y or player_ship.y) + DISEMBARK_OFFSET_Y
+        player_ship.on_foot_y = dock_base_y + DISEMBARK_OFFSET_Y
         player_ship.dock_walk_center_x = dock_x or player_ship.x
-        player_ship.dock_walk_center_y = (shopkeeper and shopkeeper.y or player_ship.y)
+        player_ship.dock_walk_center_y = dock_base_y
         player_ship.dock_walk_dock_x = dock_x or player_ship.x
-        player_ship.dock_walk_dock_y = (shopkeeper and shopkeeper.y or player_ship.y) + DOCK_TIP_OFFSET_Y
+        player_ship.dock_walk_dock_y = dock_base_y + DOCK_TIP_OFFSET_Y
         player_ship.docked_port_shop_index = nil
         player_ship.dock_walk_mode = "shore"
         player_ship.dock_walk_island_radius = nil
@@ -524,7 +526,8 @@ function port.create(deps)
         end
 
         local dock_width = 36
-        local dock_top_y = shopkeeper.y - 26
+        local dock_base_y = shopkeeper.dock_y or shopkeeper.y
+        local dock_top_y = dock_base_y - 26
         local dock_height = math.max(18, dock_tip_y - dock_top_y)
 
         love.graphics.setColor(0.47, 0.31, 0.16, 1)
@@ -619,7 +622,8 @@ function port.create(deps)
             local dock_x, dock_y = api.get_main_dock_position(shopkeeper)
             if dock_x and dock_y then
                 local dock_width = 36
-                local dock_top_y = shopkeeper.y - 26
+                local dock_base_y = shopkeeper.dock_y or shopkeeper.y
+                local dock_top_y = dock_base_y - 26
                 local dock_height = math.max(18, dock_y - dock_top_y)
                 push_boat_out_of_rect(player_ship, dock_x - (dock_width / 2), dock_top_y, dock_width, dock_height, 0)
                 push_boat_out_of_circle(player_ship, dock_x, dock_y - 8, 16)

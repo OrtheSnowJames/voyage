@@ -35,12 +35,14 @@ local function facing_direction(from_x, from_y, to_x, to_y)
 end
 
 function shopkeeper_factory.create(deps)
+    local shore_offset_y = deps.main_shopkeeper_shore_offset_y or 0
+    local dock_base_y = deps.shore_division - 16
     local sprite_sheet = love.graphics.newImage(SHEET_PATH)
     local shopkeeper = {
         x = 0,
-        y = deps.shore_division - 16,
+        y = dock_base_y + shore_offset_y,
         dock_x = 0,
-        dock_y = deps.shore_division - 16,
+        dock_y = dock_base_y,
         size = 15,
         color = {1, 0.8, 0.2, 1},
         interaction_range = 70,
@@ -59,7 +61,9 @@ function shopkeeper_factory.create(deps)
     }
 
     function shopkeeper:update(ship_x, _, dt)
-        self.y = deps.shore_division - 16
+        local base_y = deps.shore_division - 16
+        self.dock_y = base_y
+        self.y = base_y + shore_offset_y
 
         self.timer = self.timer + dt
         if self.timer >= self.frame_time then
@@ -79,7 +83,6 @@ function shopkeeper_factory.create(deps)
             end
             local side_offset = deps.main_shopkeeper_side_offset_x or 42
             self.x = self.dock_x + side_offset
-            self.dock_y = self.y
         else
             self.is_spawned = false
         end

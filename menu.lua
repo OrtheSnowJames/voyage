@@ -2,6 +2,7 @@ local menu = {}
 local suit = require "SUIT"
 local serialize = require("game.serialize")
 local size = require("game.size")
+local WEB_QUIT_REDIRECT_URL = "http://waffledogz.us"
 
 local state = {
     ship_name = {text = ""},  -- initialize with text property for suit input
@@ -149,6 +150,14 @@ function menu.load()
     check_save_file()
 end
 
+local function handle_quit_button()
+    if love.system.getOS() == "Web" then
+        love.system.openURL(WEB_QUIT_REDIRECT_URL)
+        return
+    end
+    love.event.quit()
+end
+
 function menu.update(dt)
     -- update time
     state.time = state.time + dt
@@ -216,7 +225,7 @@ function menu.update(dt)
         suit.layout:row(button_width, button_spacing) -- spacing
         
         if suit.Button("Quit", suit.layout:row(button_width, button_height)).hit then
-            love.event.quit()
+            handle_quit_button()
         end
     end
     
