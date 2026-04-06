@@ -157,15 +157,25 @@ function update_steps.shop_and_navigation(dt, state)
 
     if current_state == GameType.VOYAGE or current_state:find(GameType.SHOP, 1, true) then
         state.shop.module.update(gamestate, state.player, state.shop.keeper, state.fishing.config)
-        state.player:update(dt)
+        if current_state == GameType.VOYAGE then
+            state.player:update(dt)
+        end
         state.actions.update_ship_animation(dt)
         state.actions.update_shore_objects()
         state.shop.keeper:update(state.player.x, state.player.y, dt)
+        if current_state == GameType.VOYAGE and state.shop.module.resolve_boat_collisions then
+            state.shop.module.resolve_boat_collisions(state.player, state.shop.keeper)
+        end
     end
 end
 
 function update_steps.voyage_state(dt, state)
     if state.system.gamestate.get() ~= state.system.gametype.VOYAGE then
+        return
+    end
+
+    if state.player.is_on_foot then
+        state.fishing.runtime.update_catch_texts(dt)
         return
     end
 
@@ -324,9 +334,16 @@ function update_steps.camera_follow(state)
             center_y - canvas.CANVAS_HEIGHT / (2 * camera.scale)
         )
     else
+        local focus_x = player_ship.x
+        local focus_y = player_ship.y
+        if player_ship.is_on_foot then
+            focus_x = player_ship.on_foot_x or player_ship.x
+            focus_y = player_ship.on_foot_y or player_ship.y
+        end
+
         camera:goto(
-            player_ship.x - canvas.CANVAS_WIDTH / 2,
-            player_ship.y - canvas.CANVAS_HEIGHT / 2
+            focus_x - canvas.CANVAS_WIDTH / 2,
+            focus_y - canvas.CANVAS_HEIGHT / 2
         )
     end
 end

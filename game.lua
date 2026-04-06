@@ -189,6 +189,12 @@ end
 -- port-a-shop configuration
 local SHOP_SPACING = FISHING_LEVEL  -- distance between shops
 local SHOP_LINE_NO_FISH_DISTANCE = constants.shops.no_fish_line_distance
+local ON_FOOT_SPEED = constants.shops.on_foot_speed or 125
+local ON_FOOT_MAX_WALK_UP = constants.shops.on_foot_max_walk_up or 240
+local ON_FOOT_MAX_WALK_SIDE = constants.shops.on_foot_max_walk_side or 260
+local ON_FOOT_MAX_WALK_DOWN = constants.shops.on_foot_max_walk_down or 24
+local MAIN_DOCK_WALK_HALF_WIDTH = constants.shops.main_dock_walk_half_width or 20
+local MAIN_SHOPKEEPER_SIDE_OFFSET_X = constants.shops.main_shopkeeper_side_offset_x or 42
 
 -- port-a-shops state
 local port_a_shops = {}
@@ -213,7 +219,8 @@ local shopkeeper = shopkeeper_factory.create({
     camera = camera,
     player_ship = player_ship,
     shore_division = shore_division,
-    size = size
+    size = size,
+    main_shopkeeper_side_offset_x = MAIN_SHOPKEEPER_SIDE_OFFSET_X
 })
 state.shop.keeper = shopkeeper
 
@@ -243,6 +250,22 @@ local function reset_game()
     player_ship.velocity_y = 0
     player_ship.rotation = 0
     player_ship.target_rotation = 0
+    player_ship.is_on_foot = false
+    player_ship.on_foot_x = player_ship.x
+    player_ship.on_foot_y = player_ship.y
+    player_ship.pending_shop_interaction = false
+    player_ship.dock_walk_center_x = nil
+    player_ship.dock_walk_center_y = nil
+    player_ship.dock_walk_dock_x = nil
+    player_ship.dock_walk_dock_y = nil
+    player_ship.docked_port_shop_index = nil
+    player_ship.dock_walk_mode = nil
+    player_ship.dock_walk_island_radius = nil
+    player_ship.dock_walk_dock_half_width = nil
+    player_ship.dock_walk_dock_height = nil
+    player_ship.dock_walk_max_side = nil
+    player_ship.dock_walk_max_up = nil
+    player_ship.dock_walk_max_down = nil
     player_ship.rod = "Basic Rod"
     player_ship.sword = "Basic Sword"
     player_ship.caught_fish = {}
@@ -310,10 +333,32 @@ function ripples:draw()
 end
 
 function player_ship:update(dt)
+    local walk_center_x = tonumber(player_ship.dock_walk_center_x) or player_ship.x
+    local walk_center_y = tonumber(player_ship.dock_walk_center_y) or (shore_division - 30)
+    local dock_x = tonumber(player_ship.dock_walk_dock_x)
+    local dock_bottom_y = tonumber(player_ship.dock_walk_dock_y)
+    local dock_walk_half_width = tonumber(player_ship.dock_walk_dock_half_width) or MAIN_DOCK_WALK_HALF_WIDTH
+    local dock_height = tonumber(player_ship.dock_walk_dock_height) or 26
+    local on_foot_max_walk_up = tonumber(player_ship.dock_walk_max_up) or ON_FOOT_MAX_WALK_UP
+    local on_foot_max_walk_side = tonumber(player_ship.dock_walk_max_side) or ON_FOOT_MAX_WALK_SIDE
+    local on_foot_max_walk_down = tonumber(player_ship.dock_walk_max_down) or ON_FOOT_MAX_WALK_DOWN
+
     movement_steps.update_player_ship(self, dt, {
         mobile_controls = mobile_controls,
         normalize_rainbows = game.normalize_rainbows,
         shore_division = shore_division,
+        on_foot_speed = ON_FOOT_SPEED,
+        on_foot_max_walk_up = on_foot_max_walk_up,
+        on_foot_max_walk_side = on_foot_max_walk_side,
+        on_foot_max_walk_down = on_foot_max_walk_down,
+        on_foot_bounds_mode = player_ship.dock_walk_mode or "shore",
+        foot_island_radius = tonumber(player_ship.dock_walk_island_radius),
+        dock_x = dock_x,
+        dock_bottom_y = dock_bottom_y,
+        dock_walk_half_width = dock_walk_half_width,
+        dock_height = dock_height,
+        walk_center_x = walk_center_x,
+        walk_center_y = walk_center_y,
         last_player_ripple_pos = last_player_ripple_pos,
         ship_ripples = ship_ripples,
         RIPPLE_SPAWN_DIST = RIPPLE_SPAWN_DIST,
@@ -628,6 +673,46 @@ function game.load()
         player_ship.reached_first_1130 = player_ship.reached_first_1130 == true
     end
 
+    if player_ship.is_on_foot == nil then
+        player_ship.is_on_foot = false
+    else
+        player_ship.is_on_foot = player_ship.is_on_foot == true
+    end
+    player_ship.on_foot_x = tonumber(player_ship.on_foot_x) or player_ship.x
+    player_ship.on_foot_y = tonumber(player_ship.on_foot_y) or player_ship.y
+    player_ship.pending_shop_interaction = player_ship.pending_shop_interaction == true
+    player_ship.docked_port_shop_index = tonumber(player_ship.docked_port_shop_index)
+    if player_ship.docked_port_shop_index then
+        player_ship.docked_port_shop_index = math.max(1, math.floor(player_ship.docked_port_shop_index))
+    end
+    player_ship.dock_walk_mode = (player_ship.dock_walk_mode == "island") and "island" or "shore"
+    player_ship.dock_walk_island_radius = tonumber(player_ship.dock_walk_island_radius)
+    player_ship.dock_walk_dock_half_width = tonumber(player_ship.dock_walk_dock_half_width)
+    player_ship.dock_walk_dock_height = tonumber(player_ship.dock_walk_dock_height)
+    player_ship.dock_walk_max_side = tonumber(player_ship.dock_walk_max_side)
+    player_ship.dock_walk_max_up = tonumber(player_ship.dock_walk_max_up)
+    player_ship.dock_walk_max_down = tonumber(player_ship.dock_walk_max_down)
+
+    if player_ship.is_on_foot then
+        player_ship.dock_walk_center_x = tonumber(player_ship.dock_walk_center_x) or player_ship.on_foot_x
+        player_ship.dock_walk_center_y = tonumber(player_ship.dock_walk_center_y) or player_ship.on_foot_y
+        player_ship.dock_walk_dock_x = tonumber(player_ship.dock_walk_dock_x) or player_ship.on_foot_x
+        player_ship.dock_walk_dock_y = tonumber(player_ship.dock_walk_dock_y) or player_ship.on_foot_y
+    else
+        player_ship.dock_walk_center_x = nil
+        player_ship.dock_walk_center_y = nil
+        player_ship.dock_walk_dock_x = nil
+        player_ship.dock_walk_dock_y = nil
+        player_ship.docked_port_shop_index = nil
+        player_ship.dock_walk_mode = nil
+        player_ship.dock_walk_island_radius = nil
+        player_ship.dock_walk_dock_half_width = nil
+        player_ship.dock_walk_dock_height = nil
+        player_ship.dock_walk_max_side = nil
+        player_ship.dock_walk_max_up = nil
+        player_ship.dock_walk_max_down = nil
+    end
+
     if state.fishing.runtime then
         state.fishing.runtime.reset_state()
     end
@@ -733,8 +818,11 @@ local function during_sleep()
     end
     
     -- check main shopkeeper if not already near a port-a-shop
-    if not near_shop and shopkeeper and shopkeeper.can_interact and shopkeeper:can_interact() then
-        near_shop = true
+    if not near_shop and shopkeeper and shopkeeper.is_spawned then
+        local distance_to_main_shop = math.sqrt((shopkeeper.x - player_ship.x)^2 + (shopkeeper.y - player_ship.y)^2)
+        if distance_to_main_shop <= 75 then
+            near_shop = true
+        end
     end
     
     -- if near a shop, recover fainted enemy crew members
@@ -793,6 +881,43 @@ state.actions.force_corruption_sleep_if_needed = force_corruption_sleep_if_neede
 
 -- handle key presses in the game
 function game.keypressed(key)
+    if key == "f" and gamestate.get() == GameType.VOYAGE then
+        local function consume_f_press_for_fishing()
+            if state and state.fishing and state.fishing.runtime and state.fishing.runtime.block_fishing_until_release then
+                state.fishing.runtime.block_fishing_until_release()
+            end
+        end
+
+        if player_ship.is_on_foot then
+            if shop.request_main_shop_interaction and shop.request_main_shop_interaction(player_ship, shopkeeper) then
+                consume_f_press_for_fishing()
+                print("You talk to the shopkeeper.")
+                return
+            end
+            if shop.request_port_shop_interaction and shop.request_port_shop_interaction(player_ship) then
+                consume_f_press_for_fishing()
+                print("You talk to the port-a-shop keeper.")
+                return
+            end
+            if shop.try_board_main_dock and shop.try_board_main_dock(player_ship, shopkeeper) then
+                consume_f_press_for_fishing()
+                print("You board your boat.")
+                return
+            end
+        else
+            if shop.try_disembark_main_dock and shop.try_disembark_main_dock(player_ship, shopkeeper) then
+                consume_f_press_for_fishing()
+                print("You dock and step off your boat.")
+                return
+            end
+            if shop.try_disembark_port_shop and shop.try_disembark_port_shop(player_ship) then
+                consume_f_press_for_fishing()
+                print("You dock at the port-a-shop and step off your boat.")
+                return
+            end
+        end
+    end
+
     if key == "escape" and gamestate.get() == GameType.FISHING then
         local result = fishing_minigame.cancel_fishing()
         if result then

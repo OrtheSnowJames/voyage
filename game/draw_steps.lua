@@ -2,6 +2,121 @@ local draw_steps = {}
 local hunger = require("game.hunger")
 local crew_management = require("game.crew_management")
 
+local PLAYER_SHEET_PATH = "assets/Pirates Red Sprite Sheet.png"
+local PLAYER_FRAME_W = 16
+local PLAYER_FRAME_H = 16
+local PLAYER_SPRITE_SCALE = 2
+-- Layered look: base body (1/2/3) behind fixed outfit set (7/8/9).
+local PLAYER_BASE_COL_START = 0
+local PLAYER_OUTFIT_COL_START = 8 -- third 3-frame outfit block
+local PLAYER_ROW_BY_DIR = {
+    down = 0,   -- first row
+    up = 1,     -- second row (backward sprite)
+    left = 3,   -- swapped: third/fourth rows were reversed in-game
+    right = 2
+}
+
+local on_foot_anim = {
+    sheet = nil,
+    quads = nil,
+    load_attempted = false,
+    last_x = nil,
+    last_y = nil,
+    last_dir = "down"
+}
+
+local function load_player_sheet_if_needed()
+    if on_foot_anim.load_attempted then
+        return on_foot_anim.sheet, on_foot_anim.quads
+    end
+    on_foot_anim.load_attempted = true
+
+    local ok, sheet = pcall(love.graphics.newImage, PLAYER_SHEET_PATH)
+    if not ok or not sheet then
+        return nil, nil
+    end
+
+    local function build_quads(col_start)
+        local quads = {}
+        for dir, row in pairs(PLAYER_ROW_BY_DIR) do
+            quads[dir] = {
+                love.graphics.newQuad((col_start + 0) * PLAYER_FRAME_W, row * PLAYER_FRAME_H, PLAYER_FRAME_W, PLAYER_FRAME_H, sheet:getWidth(), sheet:getHeight()),
+                love.graphics.newQuad((col_start + 1) * PLAYER_FRAME_W, row * PLAYER_FRAME_H, PLAYER_FRAME_W, PLAYER_FRAME_H, sheet:getWidth(), sheet:getHeight()),
+                love.graphics.newQuad((col_start + 2) * PLAYER_FRAME_W, row * PLAYER_FRAME_H, PLAYER_FRAME_W, PLAYER_FRAME_H, sheet:getWidth(), sheet:getHeight())
+            }
+        end
+        return quads
+    end
+
+    local quads = {
+        base = build_quads(PLAYER_BASE_COL_START),
+        outfit = build_quads(PLAYER_OUTFIT_COL_START)
+    }
+
+    on_foot_anim.sheet = sheet
+    on_foot_anim.quads = quads
+    return sheet, quads
+end
+
+local function draw_on_foot_player(state, foot_x, foot_y)
+    local sheet, quads = load_player_sheet_if_needed()
+    if not sheet or not quads then
+        -- fallback if sprite sheet is missing or failed to load
+        love.graphics.setColor(0.95, 0.95, 0.95, 1)
+        love.graphics.circle("fill", foot_x, foot_y, 8)
+        love.graphics.setColor(0.15, 0.15, 0.2, 1)
+        love.graphics.circle("fill", foot_x, foot_y - 9, 4)
+        love.graphics.setColor(1, 1, 1, 1)
+        return
+    end
+
+    local dx = foot_x - (on_foot_anim.last_x or foot_x)
+    local dy = foot_y - (on_foot_anim.last_y or foot_y)
+    local moving = ((dx * dx) + (dy * dy)) > 0.04
+
+    if moving then
+        if math.abs(dx) > math.abs(dy) then
+            on_foot_anim.last_dir = dx >= 0 and "right" or "left"
+        else
+            on_foot_anim.last_dir = dy >= 0 and "down" or "up"
+        end
+    end
+
+    local dir = on_foot_anim.last_dir
+    local base_dir_quads = quads.base[dir] or quads.base.down
+    local outfit_dir_quads = quads.outfit[dir] or quads.outfit.down
+    local frame_index = moving and ((math.floor(state.player.time_system.time * 8) % 3) + 1) or 2
+    local base_quad = base_dir_quads[frame_index] or base_dir_quads[2]
+    local outfit_quad = outfit_dir_quads[frame_index] or outfit_dir_quads[2]
+
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(
+        sheet,
+        base_quad,
+        foot_x,
+        foot_y,
+        0,
+        PLAYER_SPRITE_SCALE,
+        PLAYER_SPRITE_SCALE,
+        PLAYER_FRAME_W / 2,
+        PLAYER_FRAME_H - 1
+    )
+    love.graphics.draw(
+        sheet,
+        outfit_quad,
+        foot_x,
+        foot_y,
+        0,
+        PLAYER_SPRITE_SCALE,
+        PLAYER_SPRITE_SCALE,
+        PLAYER_FRAME_W / 2,
+        PLAYER_FRAME_H - 1
+    )
+
+    on_foot_anim.last_x = foot_x
+    on_foot_anim.last_y = foot_y
+end
+
 local function prepare_ripple_uniform_data(state)
     local ripple_x_data = {}
     local ripple_y_data = {}
@@ -313,6 +428,9 @@ function draw_steps.draw_world(state)
     draw_steps.draw_shore(state)
 
     if not player_ship.time_system.is_sleeping then
+        -- Draw port-a-shops before actors so player/boat stays in front.
+        state.shop.module.draw_shops(state.camera)
+        state.shop.module.draw_main_dock(state.shop.keeper)
         state.shop.keeper:draw()
 
         local ambient_light = state.actions.get_ambient_light()
@@ -335,7 +453,7 @@ function draw_steps.draw_world(state)
         end
 
         local ship_speed = math.sqrt(player_ship.velocity_x^2 + player_ship.velocity_y^2)
-        if ship_speed > 10 then
+        if not player_ship.is_on_foot and ship_speed > 10 then
             local wake_direction = math.atan2(-player_ship.velocity_y, -player_ship.velocity_x)
             love.graphics.setColor(1, 1, 1, 0.2 * (glow_intensity * 0.5 + 0.5))
             for i = 1, 3 do
@@ -391,11 +509,15 @@ function draw_steps.draw_world(state)
         local name_y = player_ship.y + (player_ship.radius * 1.8) + 8
         love.graphics.print(player_ship.name, name_x, name_y)
 
+        if player_ship.is_on_foot then
+            local foot_x = player_ship.on_foot_x or player_ship.x
+            local foot_y = player_ship.on_foot_y or player_ship.y
+            draw_on_foot_player(state, foot_x, foot_y)
+        end
+
         draw_combat_result_text(state)
         draw_catch_texts(state)
         draw_fishing_and_danger_hud(state)
-
-        state.shop.module.draw_shops(state.camera)
     end
 
     love.graphics.pop()
@@ -439,6 +561,7 @@ function draw_steps.draw_time_and_debug(state)
     local mobile_controls = state.ui.mobile
     local fishing = state.fishing.module
     local gamestate = state.system.gamestate
+    local GameType = state.system.gametype
     local game_config = state.fishing.config
 
     love.graphics.setColor(1, 1, 1, 1)
@@ -454,6 +577,23 @@ function draw_steps.draw_time_and_debug(state)
     love.graphics.print(string.format("Fishing Level: %d", player_ship.y / fishing_level), 10, 30)
     hunger.draw_hud(state)
     state.ui.alert.draw(state.system.size)
+
+    if gamestate.get() == GameType.VOYAGE then
+        local shop_module = state.shop.module
+        local can_disembark_main = shop_module.can_disembark_main_dock and shop_module.can_disembark_main_dock(player_ship, state.shop.keeper)
+        local can_disembark_port = shop_module.can_disembark_port_shop and shop_module.can_disembark_port_shop(player_ship)
+        if not player_ship.is_on_foot and (can_disembark_main or can_disembark_port) then
+            love.graphics.print("Press F to dock and get out", 10, 110)
+        elseif player_ship.is_on_foot then
+            local can_talk_main = shop_module.can_talk_to_main_shopkeeper and shop_module.can_talk_to_main_shopkeeper(player_ship, state.shop.keeper)
+            local can_talk_port = shop_module.can_talk_to_port_shopkeeper and shop_module.can_talk_to_port_shopkeeper(player_ship)
+            if can_talk_main or can_talk_port then
+                love.graphics.print("Press F to trade with shopkeeper", 10, 110)
+            elseif shop_module.can_board_main_dock and shop_module.can_board_main_dock(player_ship) then
+                love.graphics.print("Press F to board your boat", 10, 110)
+            end
+        end
+    end
 
     if debugOptions.showDebugButtons and not player_ship.time_system.is_sleeping then
         suit.layout:reset(10, 40)

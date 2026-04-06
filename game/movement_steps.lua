@@ -14,8 +14,129 @@ local function refresh_control_corruption(strength)
     control_corruption.drift_y = (love.math.random() * 2 - 1) * 22 * strength
 end
 
+local function clamp(v, lo, hi)
+    if v < lo then
+        return lo
+    end
+    if v > hi then
+        return hi
+    end
+    return v
+end
+
+local function clamp_to_rect(px, py, rx, ry, rw, rh)
+    return clamp(px, rx, rx + rw), clamp(py, ry, ry + rh)
+end
+
+local function clamp_to_circle(px, py, cx, cy, r)
+    local dx = px - cx
+    local dy = py - cy
+    local dist_sq = (dx * dx) + (dy * dy)
+    if dist_sq <= (r * r) then
+        return px, py
+    end
+    local dist = math.sqrt(dist_sq)
+    if dist <= 0.0001 then
+        return cx, cy - r
+    end
+    local s = r / dist
+    return cx + (dx * s), cy + (dy * s)
+end
+
 function movement_steps.update_player_ship(self, dt, ctx)
     local mobile_controls = ctx.mobile_controls
+
+    if self.is_on_foot then
+        local move_x = 0
+        local move_y = 0
+
+        if love.keyboard.isDown("a") or mobile_controls.buttons.left.pressed then
+            move_x = move_x - 1
+        end
+        if love.keyboard.isDown("d") or mobile_controls.buttons.right.pressed then
+            move_x = move_x + 1
+        end
+        if love.keyboard.isDown("w") or mobile_controls.buttons.forward.pressed then
+            move_y = move_y - 1
+        end
+        if love.keyboard.isDown("s") then
+            move_y = move_y + 1
+        end
+
+        local len = math.sqrt((move_x * move_x) + (move_y * move_y))
+        if len > 0 then
+            move_x = move_x / len
+            move_y = move_y / len
+        end
+
+        local walk_speed = ctx.on_foot_speed or 125
+        self.on_foot_x = (self.on_foot_x or self.x) + (move_x * walk_speed * dt)
+        self.on_foot_y = (self.on_foot_y or self.y) + (move_y * walk_speed * dt)
+
+        local walk_center_x = ctx.walk_center_x or self.x
+        local walk_center_y = ctx.walk_center_y or (ctx.shore_division - 30)
+        local max_walk_side = ctx.on_foot_max_walk_side or 260
+        local max_walk_up = ctx.on_foot_max_walk_up or 240
+        local max_walk_down = ctx.on_foot_max_walk_down or 24
+        local on_foot_bounds_mode = ctx.on_foot_bounds_mode or "shore"
+        local dock_x = ctx.dock_x
+        local dock_bottom_y = ctx.dock_bottom_y
+        local dock_half_width = ctx.dock_walk_half_width or 20
+        local dock_height = ctx.dock_height or 26
+
+        local min_x = walk_center_x - max_walk_side
+        local max_x = walk_center_x + max_walk_side
+        local min_y = walk_center_y - max_walk_up
+        local max_y = walk_center_y + max_walk_down
+
+        if on_foot_bounds_mode == "shore" then
+            local shoreline_y = (ctx.shore_division or 0) - 20
+            max_y = shoreline_y
+            if dock_x and dock_bottom_y and math.abs(self.on_foot_x - dock_x) <= dock_half_width then
+                max_y = math.max(shoreline_y, dock_bottom_y)
+            end
+        end
+
+        self.on_foot_x = math.max(min_x, math.min(max_x, self.on_foot_x))
+        self.on_foot_y = math.max(min_y, math.min(max_y, self.on_foot_y))
+
+        -- Port island mode: allow only island circle and dock plank, never free water.
+        local island_radius = tonumber(ctx.foot_island_radius)
+        if island_radius and island_radius > 0 and dock_x and dock_bottom_y then
+            local px = self.on_foot_x
+            local py = self.on_foot_y
+            local cx = walk_center_x
+            local cy = walk_center_y
+            local in_circle = ((px - cx) * (px - cx) + (py - cy) * (py - cy)) <= (island_radius * island_radius)
+
+            local dock_rect_x = dock_x - dock_half_width
+            local dock_rect_y = dock_bottom_y - dock_height
+            local dock_rect_w = dock_half_width * 2
+            local dock_rect_h = dock_height
+            local in_dock = (px >= dock_rect_x and px <= dock_rect_x + dock_rect_w and py >= dock_rect_y and py <= dock_rect_y + dock_rect_h)
+
+            if not in_circle and not in_dock then
+                local cx1, cy1 = clamp_to_circle(px, py, cx, cy, island_radius)
+                local cx2, cy2 = clamp_to_rect(px, py, dock_rect_x, dock_rect_y, dock_rect_w, dock_rect_h)
+
+                local d1 = ((px - cx1) * (px - cx1)) + ((py - cy1) * (py - cy1))
+                local d2 = ((px - cx2) * (px - cx2)) + ((py - cy2) * (py - cy2))
+
+                if d1 <= d2 then
+                    self.on_foot_x = cx1
+                    self.on_foot_y = cy1
+                else
+                    self.on_foot_x = cx2
+                    self.on_foot_y = cy2
+                end
+            end
+        end
+
+        self.velocity_x = 0
+        self.velocity_y = 0
+        ctx.update_ship_animation(dt)
+        return
+    end
 
     local turning = false
     if love.keyboard.isDown("a") or mobile_controls.buttons.left.pressed then

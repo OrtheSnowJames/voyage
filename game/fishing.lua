@@ -702,6 +702,7 @@ function fishing.create_runtime(deps)
     local runtime_state = {
         catch_texts = {},
         fishing_pressed = false,
+        wait_for_fish_release = false,
         fishing_cooldown = 0,
         last_cooldown = deps.game_config.fishing_cooldown,
         player_just_failed_fishing = false
@@ -714,6 +715,7 @@ function fishing.create_runtime(deps)
             runtime_state.catch_texts[i] = nil
         end
         runtime_state.fishing_pressed = false
+        runtime_state.wait_for_fish_release = false
         runtime_state.fishing_cooldown = 0
         runtime_state.last_cooldown = deps.game_config.fishing_cooldown
         runtime_state.player_just_failed_fishing = false
@@ -781,7 +783,7 @@ function fishing.create_runtime(deps)
 
     function runtime.fish(dt)
         local fishing_down = love.keyboard.isDown("f") or deps.mobile_controls.buttons.fish.pressed
-        local fishing_released = fishing_down and not runtime_state.fishing_pressed
+        local fishing_just_pressed = fishing_down and not runtime_state.fishing_pressed
         runtime_state.fishing_pressed = fishing_down
 
         local prev_cooldown = runtime_state.fishing_cooldown
@@ -799,7 +801,14 @@ function fishing.create_runtime(deps)
             end
         end
 
-        if fishing_released and runtime_state.fishing_cooldown <= 0 and deps.gamestate.get() == deps.GameType.VOYAGE then
+        if runtime_state.wait_for_fish_release then
+            if not fishing_down then
+                runtime_state.wait_for_fish_release = false
+            end
+            return
+        end
+
+        if fishing_just_pressed and runtime_state.fishing_cooldown <= 0 and deps.gamestate.get() == deps.GameType.VOYAGE then
             if blocked_by_shop_line then
                 print("You can't fish on shop lines.")
                 return
@@ -838,6 +847,11 @@ function fishing.create_runtime(deps)
 
     function runtime.set_player_just_failed_fishing(value)
         runtime_state.player_just_failed_fishing = value
+    end
+
+    function runtime.block_fishing_until_release()
+        runtime_state.wait_for_fish_release = true
+        runtime_state.fishing_pressed = true
     end
 
     return runtime
