@@ -44,6 +44,13 @@ local function recreate_canvas(width, height)
     end
 end
 
+local function sync_canvas_dimensions_if_needed()
+    local w, h = love.graphics.getDimensions()
+    if w ~= CANVAS_WIDTH or h ~= CANVAS_HEIGHT then
+        recreate_canvas(w, h)
+    end
+end
+
 function love.load()
     -- Fix grey screen in love.js
     if love.system.getOS() ~= "Web" then
@@ -75,6 +82,8 @@ function love.update(dt)
         return
     end
     local ok, err = xpcall(function()
+        sync_canvas_dimensions_if_needed()
+
         if game_states[gamestate.get()] then
             local next_state_str = game.update(dt)
             if next_state_str then
@@ -111,6 +120,8 @@ function love.draw()
         return
     end
     local ok, err = xpcall(function()
+        sync_canvas_dimensions_if_needed()
+
         -- Reset graphics state each frame. WebGL builds can keep stale state.
         love.graphics.origin()
         pcall(love.graphics.setShader)
