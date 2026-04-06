@@ -7,11 +7,11 @@
     <title>voyage :: warped shell</title>
     <style>
       :root {
-        --ink: #021a2a;
-        --foam: #93c3e6;
-        --acid: #f6ff7f;
-        --hot: #ff5f8f;
-        --cold: #5de0ff;
+        --ink: #ede8d8;
+        --foam: #838456;
+        --acid: #a8b06a;
+        --hot: #5f4f79;
+        --cold: #6f7a57;
       }
 
       * {
@@ -24,19 +24,19 @@
         color: var(--ink);
         font-family: "Courier New", Courier, monospace;
         background:
-          radial-gradient(circle at 20% 10%, rgba(246, 255, 127, 0.2), transparent 35%),
-          radial-gradient(circle at 80% 20%, rgba(255, 95, 143, 0.2), transparent 35%),
-          linear-gradient(130deg, #f0b5d7 0 18%, #8ec5e8 18% 100%);
+          radial-gradient(circle at 20% 10%, rgba(111, 122, 87, 0.22), transparent 38%),
+          radial-gradient(circle at 80% 20%, rgba(95, 79, 121, 0.20), transparent 40%),
+          linear-gradient(130deg, #3b3654 0%, #585868 45%, #838456 100%);
       }
 
       .shell {
         width: min(1100px, 96vw);
         margin: 10px auto;
         padding: 12px;
-        border: 3px solid rgba(2, 26, 42, 0.45);
+        border: 3px solid rgba(237, 232, 216, 0.28);
         border-radius: 18px;
-        background: rgba(255, 255, 255, 0.12);
-        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25) inset;
+        background: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 0 0 3px rgba(237, 232, 216, 0.18) inset;
       }
 
       .masthead {
@@ -56,8 +56,8 @@
       .badge {
         padding: 4px 10px;
         border-radius: 999px;
-        border: 2px dashed rgba(2, 26, 42, 0.55);
-        background: rgba(255, 255, 255, 0.35);
+        border: 2px dashed rgba(237, 232, 216, 0.45);
+        background: rgba(255, 255, 255, 0.14);
         font-size: 12px;
       }
 
@@ -75,8 +75,8 @@
         background:
           repeating-linear-gradient(
             -45deg,
-            rgba(2, 26, 42, 0.035) 0 10px,
-            rgba(2, 26, 42, 0.065) 10px 20px
+            rgba(237, 232, 216, 0.03) 0 10px,
+            rgba(237, 232, 216, 0.06) 10px 20px
           );
       }
 
@@ -87,7 +87,7 @@
         position: absolute;
         inset: 0;
         margin: 0;
-        border: 2px solid rgba(2, 26, 42, 0.4);
+        border: 2px solid rgba(237, 232, 216, 0.26);
         border-radius: 8px;
       }
 
@@ -97,7 +97,7 @@
 
       #canvas {
         padding-right: 0;
-        border: 2px solid rgba(2, 26, 42, 0.45);
+        border: 2px solid rgba(237, 232, 216, 0.3);
         visibility: hidden;
       }
 
@@ -111,7 +111,7 @@
         padding: 10px;
         background: rgba(20, 20, 25, 0.92);
         color: #ff8f95;
-        border: 2px solid rgba(255, 95, 143, 0.45);
+        border: 2px solid rgba(168, 176, 106, 0.45);
       }
 
       .controls {
@@ -122,11 +122,11 @@
 
       .controls button {
         cursor: pointer;
-        border: 2px solid rgba(2, 26, 42, 0.5);
+        border: 2px solid rgba(237, 232, 216, 0.36);
         border-radius: 999px;
         padding: 6px 12px;
         background: linear-gradient(90deg, var(--acid), var(--cold));
-        color: #02233a;
+        color: #1a1a16;
         font-weight: bold;
       }
 
@@ -150,6 +150,7 @@
       </div>
       <div class="controls">
         <button onclick="goFullScreen();">Go Fullscreen</button>
+        <button onclick="window.location.href = 'http://waffledogz.us'">waffledogz.us</button>
       </div>
       <div class="hint">Hint: hard refresh if the screen is blank</div>
     </div>
@@ -178,11 +179,11 @@
       var loadingContext = document.getElementById("loadingCanvas").getContext("2d");
       function drawLoadingText(text) {
         var canvas = loadingContext.canvas;
-        loadingContext.fillStyle = "rgb(142, 195, 227)";
+        loadingContext.fillStyle = "rgb(59, 54, 84)";
         loadingContext.fillRect(0, 0, canvas.width, canvas.height);
         loadingContext.font = "2em arial";
         loadingContext.textAlign = "center";
-        loadingContext.fillStyle = "rgb(11, 86, 117)";
+        loadingContext.fillStyle = "rgb(232, 227, 214)";
         loadingContext.fillText(text, canvas.width / 2, canvas.height / 2);
         loadingContext.fillText("Powered By Emscripten.", canvas.width / 2, canvas.height / 4);
         loadingContext.fillText("Powered By LÖVE.", canvas.width / 2, (canvas.height / 4) * 3);
