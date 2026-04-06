@@ -198,6 +198,7 @@ local cheat_runtime
 local normalize_rainbows
 local reset_cheating_state
 local update_ship_animation
+local anti_cheat_enabled = true
 
 local function is_on_shop_line(y)
     if math.abs(y - shore_division) <= SHOP_LINE_NO_FISH_DISTANCE then
@@ -461,6 +462,11 @@ local function increase_rainbows_for_new_day()
 end
 
 local function detect_cheating()
+    if not anti_cheat_enabled then
+        cheat_runtime.last_observed_time = player_ship.time_system.time or 0
+        return false
+    end
+
     local current_time = player_ship.time_system.time or 0
     local previous_time = cheat_runtime.last_observed_time
     cheat_runtime.last_observed_time = current_time
@@ -552,10 +558,18 @@ end
 function game.load()
     -- check if mobile
     on_mobile = false
+    on_web = false
     local os = love.system.getOS()
     if os == 'iOS' or os == 'Android' then
         on_mobile = true
+        print("mobile")
+    elseif os == 'Web' then
+        on_web = true
+        print("web")
+    else
+        print("not on web or mobile")
     end
+    anti_cheat_enabled = not (on_mobile or os == "Web")
 
     mobile_controls.enabled = on_mobile
 

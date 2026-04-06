@@ -226,7 +226,7 @@ function fishing.get_fish_avalible(x, y, game_time)
             end
         end
 
-        if time_of_day >= 11.5 and math.random() < 0.01 then
+        if time_of_day >= 11.5 and math.random() < 0.05 then
             table.insert(available_fish, "Gold Sturgeon")
         end
     end

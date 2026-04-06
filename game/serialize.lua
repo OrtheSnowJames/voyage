@@ -102,7 +102,29 @@ end
 local function do_deserialize(str)
     -- wrap the string in `return (...)` to ensure it's treated as an expression
     -- and returns a value, rather than just executing statements.
-    local chunk, err = load("return " .. str)
+    local source = "return " .. str
+    local chunk, err
+
+    if loadstring then
+        -- Lua 5.1 / LuaJIT path.
+        chunk, err = loadstring(source)
+    else
+        -- Lua 5.2+ path.
+        local ok, result = pcall(load, source)
+        if ok and type(result) == "function" then
+            chunk = result
+        else
+            -- Fallback for environments where load expects a reader function.
+            local first = true
+            chunk, err = load(function()
+                if first then
+                    first = false
+                    return source
+                end
+                return nil
+            end)
+        end
+    end
     if not chunk then
         return nil, "Syntax error in serialized data: " .. err
     end
@@ -125,6 +147,10 @@ end
 function serialize.load_data(options)
     options = options or {}
     local allow_tampered = options.allow_tampered == true
+    if not love.filesystem.getInfo("save.lua") then
+        save_tampered = false
+        return nil
+    end
     local content = love.filesystem.read("save.lua")
     if content then
         local expected_sig = love.filesystem.read("save.sig")

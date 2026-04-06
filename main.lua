@@ -21,68 +21,140 @@ local game_states = {
 local canvas = nil
 local CANVAS_WIDTH = size.CANVAS_WIDTH
 local CANVAS_HEIGHT = size.CANVAS_HEIGHT
+local USE_OFFSCREEN_CANVAS = true
+local runtime_error = nil
+
+local function record_runtime_error(context, err)
+    local trace = ""
+    if debug and debug.traceback then
+        trace = "\n" .. debug.traceback("", 2)
+    end
+    runtime_error = tostring(context) .. ": " .. tostring(err) .. trace
+    print(runtime_error)
+end
 
 local function recreate_canvas(width, height)
     size.setDimensions(width, height)
     CANVAS_WIDTH = size.CANVAS_WIDTH
     CANVAS_HEIGHT = size.CANVAS_HEIGHT
-    canvas = love.graphics.newCanvas(CANVAS_WIDTH, CANVAS_HEIGHT)
+    if USE_OFFSCREEN_CANVAS then
+        canvas = love.graphics.newCanvas(CANVAS_WIDTH, CANVAS_HEIGHT)
+    else
+        canvas = nil
+    end
 end
 
 function love.load()
-    local window_width, window_height = love.graphics.getDimensions()
-    recreate_canvas(window_width, window_height)
-    math.randomseed(os.time())
+    -- Fix grey screen in love.js
+    if love.system.getOS() ~= "Web" then
+        love.window.setMode(800, 600, {
+            resizable = true,
+            minwidth = 400,
+            minheight = 300
+        })
+    end
 
-    gamestate.set(GameType.MENU)
-    game.load()
-    menu.load()
+    local ok, err = xpcall(function()
+        print("hello")
+        USE_OFFSCREEN_CANVAS = love.system.getOS() ~= "Web"
+        local window_width, window_height = love.graphics.getDimensions()
+        recreate_canvas(window_width, window_height)
+        math.randomseed(os.time())
+
+        gamestate.set(GameType.MENU)
+        game.load()
+        menu.load()
+    end, function(e) return e end)
+    if not ok then
+        record_runtime_error("load", err)
+    end
 end
 
 function love.update(dt)
-    if game_states[gamestate.get()] then
-        local next_state_str = game.update(dt)
-        if next_state_str then
-            gamestate.set(next_state_str) -- should only be "menu"
-        end
-    elseif gamestate.get() == GameType.MENU then
-        local next_state_str = menu.update(dt)
-        if next_state_str then
-            -- store ship name before transitioning to game
-            if next_state_str == "game" then
-                ship_name = menu.get_ship_name()
-                gamestate.set(GameType.VOYAGE)
-            else
-                gamestate.set(next_state_str)
+    if runtime_error then
+        return
+    end
+    local ok, err = xpcall(function()
+        if game_states[gamestate.get()] then
+            local next_state_str = game.update(dt)
+            if next_state_str then
+                gamestate.set(next_state_str) -- should only be "menu"
+            end
+        elseif gamestate.get() == GameType.MENU then
+            local next_state_str = menu.update(dt)
+            if next_state_str then
+                -- store ship name before transitioning to game
+                if next_state_str == "game" then
+                    ship_name = menu.get_ship_name()
+                    gamestate.set(GameType.VOYAGE)
+                else
+                    gamestate.set(next_state_str)
+                end
             end
         end
+    end, function(e) return e end)
+    if not ok then
+        record_runtime_error("update", err)
     end
 end
 
 function love.draw()
-    -- set the canvas as the render target with stencil support
-    love.graphics.setCanvas{canvas, stencil=true}
-    canvas:setFilter("nearest", "nearest")
-    love.graphics.clear()
-    
-    -- draw everything to the current canvas resolution
-    if game_states[gamestate.get()] then
-        game.draw()
-    elseif gamestate.get() == GameType.MENU then
-        menu.draw()
+    if runtime_error then
+        love.graphics.setCanvas()
+        love.graphics.origin()
+        pcall(love.graphics.setShader)
+        pcall(love.graphics.setScissor)
+        love.graphics.clear(0.1, 0.1, 0.1, 1)
+        love.graphics.setColor(1, 0.4, 0.4, 1)
+        love.graphics.printf(runtime_error, 12, 12, math.max(100, love.graphics.getWidth() - 24))
+        love.graphics.setColor(1, 1, 1, 1)
+        return
     end
-    
-    -- reset canvas and draw it scaled to window size
-    love.graphics.setCanvas()
-    
-    -- draw canvas to the window; scale should usually be 1:1 since we recreate on resize
-    local window_width = love.graphics.getWidth()
-    local window_height = love.graphics.getHeight()
-    local scale_x = window_width / CANVAS_WIDTH
-    local scale_y = window_height / CANVAS_HEIGHT
+    local ok, err = xpcall(function()
+        -- Reset graphics state each frame. WebGL builds can keep stale state.
+        love.graphics.origin()
+        pcall(love.graphics.setShader)
+        pcall(love.graphics.setScissor)
+        love.graphics.setColor(1, 1, 1, 1)
 
-    -- draw the canvas stretched to current window size
-    love.graphics.draw(canvas, 0, 0, 0, scale_x, scale_y)
+        if USE_OFFSCREEN_CANVAS and canvas then
+            -- set the canvas as the render target with stencil support
+            love.graphics.setCanvas({canvas, stencil = true})
+            canvas:setFilter("nearest", "nearest")
+            love.graphics.clear()
+
+            -- draw everything to the current canvas resolution
+            if game_states[gamestate.get()] then
+                game.draw()
+            elseif gamestate.get() == GameType.MENU then
+                menu.draw()
+            end
+
+            -- reset canvas and draw it scaled to window size
+            love.graphics.setCanvas()
+
+            -- draw canvas to the window; scale should usually be 1:1 since we recreate on resize
+            local window_width = love.graphics.getWidth()
+            local window_height = love.graphics.getHeight()
+            local scale_x = window_width / CANVAS_WIDTH
+            local scale_y = window_height / CANVAS_HEIGHT
+
+            -- draw the canvas stretched to current window size
+            love.graphics.draw(canvas, 0, 0, 0, scale_x, scale_y)
+        else
+            -- Web fallback: draw directly in the current canvas size.
+            love.graphics.clear(0, 0, 0, 1)
+            if game_states[gamestate.get()] then
+                game.draw()
+            elseif gamestate.get() == GameType.MENU then
+                menu.draw()
+            end
+        end
+    end, function(e) return e end)
+    if not ok then
+        pcall(love.graphics.setCanvas)
+        record_runtime_error("draw", err)
+    end
 end
 
 -- add keyboard event handler for debug toggle
@@ -151,7 +223,7 @@ function love.windowToCanvas(x, y)
     local window_height = love.graphics.getHeight()
     local canvas_x = x * (CANVAS_WIDTH / math.max(1, window_width))
     local canvas_y = y * (CANVAS_HEIGHT / math.max(1, window_height))
-    
+
     return canvas_x, canvas_y
 end
 

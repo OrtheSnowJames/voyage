@@ -13,7 +13,7 @@ local constants = {
         enabled_default = true,
         button_size = 60,
         button_spacing = 20,
-        button_alpha = 0.8
+        button_alpha = 0.6
     },
     combat = {
         zoom_duration = 2.0,
