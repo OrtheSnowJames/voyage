@@ -7,6 +7,34 @@ mod_terminal.__index = mod_terminal
 local LAUNCH_TOTAL_DURATION = 2.0
 local LAUNCH_TEXT_FADE_DURATION = 0.2
 local LAUNCH_BG_FADE_DURATION = 0.2
+local scanline_shader = nil
+
+local function get_scanline_shader()
+    if scanline_shader then
+        return scanline_shader
+    end
+
+    local ok, shader_or_err = pcall(love.graphics.newShader, [[
+        extern number lineSpacing;
+        extern number darkness;
+        extern number yOffset;
+
+        vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
+            number row = floor((screen_coords.y - yOffset) / max(1.0, lineSpacing));
+            number shade = (mod(row, 2.0) == 0.0) ? darkness : 1.0;
+            return vec4(color.rgb * shade, color.a);
+        }
+    ]])
+
+    if ok then
+        scanline_shader = shader_or_err
+    else
+        print("[mod_terminal] scanline shader failed: " .. tostring(shader_or_err))
+        scanline_shader = false
+    end
+
+    return scanline_shader
+end
 
 local function clamp(value, min_value, max_value)
     if value < min_value then
@@ -87,6 +115,7 @@ function mod_terminal.new(opts)
         prompt = "> ",
         button_boxes = {},
         scroll = nil,
+        scroll_to_bottom_pending = false,
         launching = false,
         launch_timer = 0
     }, mod_terminal)
@@ -98,6 +127,7 @@ end
 
 function mod_terminal:push(text)
     table.insert(self.log, tostring(text))
+    self.scroll_to_bottom_pending = true
 end
 
 function mod_terminal:refresh_listing()
@@ -339,8 +369,16 @@ function mod_terminal:draw(canvas_width, canvas_height)
     local text_alpha = 1 - text_fade_progress
 
     love.graphics.clear(0.02 * panel_mul, 0.03 * panel_mul, 0.03 * panel_mul, 1)
+    local shader = get_scanline_shader()
+    if shader then
+        shader:send("lineSpacing", 2.0)
+        shader:send("darkness", 0.78)
+        shader:send("yOffset", panel_y)
+        love.graphics.setShader(shader)
+    end
     love.graphics.setColor(0.07 * panel_mul, 0.09 * panel_mul, 0.09 * panel_mul, 1)
     love.graphics.rectangle("fill", panel_x, panel_y, panel_w, panel_h, 8, 8)
+    love.graphics.setShader()
     love.graphics.setColor(0.15 * panel_mul, 0.22 * panel_mul, 0.18 * panel_mul, 1)
     love.graphics.setLineWidth(2)
     love.graphics.rectangle("line", panel_x, panel_y, panel_w, panel_h, 8, 8)
@@ -368,6 +406,18 @@ function mod_terminal:draw(canvas_width, canvas_height)
             content_height = content_h,
             reserve_scrollbar_space = true
         })
+        if self.scroll_to_bottom_pending then
+            self.scroll.offset = self.scroll.max_offset or 0
+            scrolling.update(self.scroll, {
+                viewport_x = viewport_x,
+                viewport_y = viewport_y,
+                viewport_width = viewport_w,
+                viewport_height = viewport_h,
+                content_height = content_h,
+                reserve_scrollbar_space = true
+            })
+            self.scroll_to_bottom_pending = false
+        end
     end
 
     local scroll_y = self.scroll and scrolling.get_offset_y(self.scroll, true) or 0
@@ -440,10 +490,12 @@ function mod_terminal:keypressed(key)
     if key == "return" then
         self:run_command(self.input)
         self.input = ""
+        self.scroll_to_bottom_pending = true
         return true
     end
     if key == "tab" then
         self:autocomplete_input()
+        self.scroll_to_bottom_pending = true
         return true
     end
     if key == "backspace" then
@@ -456,6 +508,7 @@ function mod_terminal:keypressed(key)
         else
             self.input = self.input:sub(1, math.max(0, #self.input - 1))
         end
+        self.scroll_to_bottom_pending = true
         return true
     end
     return true
@@ -467,6 +520,7 @@ function mod_terminal:textinput(t)
     end
     if not self.is_mobile and not self.launching then
         self.input = self.input .. t
+        self.scroll_to_bottom_pending = true
     end
     return true
 end

@@ -915,6 +915,7 @@ function game.keypressed(key)
             state.fishing.runtime.add_catch_text("Fishing cancelled!")
             print("Fishing cancelled!")
             -- reset cooldown
+            state.fishing.runtime.set_player_just_failed_fishing(true)
             state.fishing.runtime.set_fishing_cooldown(game_config.fishing_cooldown)
             gamestate.set(GameType.VOYAGE)
         end

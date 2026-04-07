@@ -245,8 +245,12 @@ function morningtext.update(dt)
     end
 end
 
-function morningtext.draw()
+function morningtext.draw(sys)
     if not state.active or not state.lines then
+        return
+    end
+
+    if sys.system.gamestate.get() ~= sys.system.gametype.VOYAGE then
         return
     end
 

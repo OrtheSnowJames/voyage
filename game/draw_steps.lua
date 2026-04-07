@@ -586,7 +586,7 @@ function draw_steps.draw_post_world_overlays(state)
     end
 
     crew_management.draw_overlay(state)
-    state.ui.morningtext.draw()
+    state.ui.morningtext.draw(state)
 end
 
 function draw_steps.draw_time_and_debug(state)
