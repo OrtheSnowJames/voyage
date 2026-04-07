@@ -70,31 +70,30 @@ function mods.load_all(state)
     for _, filename in ipairs(sorted_lua_files("mods")) do
         if file_enabled[filename] == false then
             print("[mods] skipped disabled file: " .. filename)
-            goto continue
-        end
-        local path = "mods/" .. filename
-        local chunk, load_err = love.filesystem.load(path)
-        if not chunk then
-            print("[mods] failed to load " .. path .. ": " .. tostring(load_err))
         else
-            local ok, result = pcall(chunk)
-            if not ok then
-                print("[mods] runtime error in " .. path .. ": " .. tostring(result))
+            local path = "mods/" .. filename
+            local chunk, load_err = love.filesystem.load(path)
+            if not chunk then
+                print("[mods] failed to load " .. path .. ": " .. tostring(load_err))
             else
-                local mod = result
-                if type(mod) == "function" then
-                    mod = {on_load = mod}
-                end
-
-                if type(mod) == "table" then
-                    mod.__path = path
-                    table.insert(loaded_mods, mod)
+                local ok, result = pcall(chunk)
+                if not ok then
+                    print("[mods] runtime error in " .. path .. ": " .. tostring(result))
                 else
-                    print("[mods] " .. path .. " must return a table or function")
+                    local mod = result
+                    if type(mod) == "function" then
+                        mod = {on_load = mod}
+                    end
+
+                    if type(mod) == "table" then
+                        mod.__path = path
+                        table.insert(loaded_mods, mod)
+                    else
+                        print("[mods] " .. path .. " must return a table or function")
+                    end
                 end
             end
         end
-        ::continue::
     end
 
     for _, mod in ipairs(loaded_mods) do
