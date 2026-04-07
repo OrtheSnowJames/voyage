@@ -52,6 +52,10 @@ local function sync_canvas_dimensions_if_needed()
 end
 
 function love.load()
+    -- Disable smoothing/anti-aliasing for a crisp pixel look.
+    love.graphics.setDefaultFilter("nearest", "nearest", 1)
+    love.graphics.setLineStyle("rough")
+
     -- Fix grey screen in love.js
     if love.system.getOS() ~= "Web" then
         love.window.setMode(800, 600, {

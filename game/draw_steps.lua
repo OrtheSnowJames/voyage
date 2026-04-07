@@ -4,6 +4,7 @@ local crew_management = require("game.crew_management")
 local action_display = require("game.action_display")
 
 local PLAYER_SHEET_PATH = "assets/Pirates Red Sprite Sheet.png"
+local SLEEPING_SPRITE_PATH = "assets/sleeping.png"
 local PLAYER_FRAME_W = 16
 local PLAYER_FRAME_H = 16
 local PLAYER_SPRITE_SCALE = 2
@@ -19,6 +20,7 @@ local PLAYER_ROW_BY_DIR = {
 
 local on_foot_anim = {
     sheet = nil,
+    sleeping_sprite = nil,
     quads = nil,
     load_attempted = false,
     last_x = nil,
@@ -28,13 +30,18 @@ local on_foot_anim = {
 
 local function load_player_sheet_if_needed()
     if on_foot_anim.load_attempted then
-        return on_foot_anim.sheet, on_foot_anim.quads
+        return on_foot_anim.sheet, on_foot_anim.quads, on_foot_anim.sleeping_sprite
     end
     on_foot_anim.load_attempted = true
 
+    local sleeping_ok, sleeping_sprite = pcall(love.graphics.newImage, SLEEPING_SPRITE_PATH)
+    if sleeping_ok and sleeping_sprite then
+        on_foot_anim.sleeping_sprite = sleeping_sprite
+    end
+
     local ok, sheet = pcall(love.graphics.newImage, PLAYER_SHEET_PATH)
     if not ok or not sheet then
-        return nil, nil
+        return nil, nil, on_foot_anim.sleeping_sprite
     end
 
     local function build_quads(col_start)
@@ -56,11 +63,32 @@ local function load_player_sheet_if_needed()
 
     on_foot_anim.sheet = sheet
     on_foot_anim.quads = quads
-    return sheet, quads
+    return sheet, quads, on_foot_anim.sleeping_sprite
 end
 
 local function draw_on_foot_player(state, foot_x, foot_y)
-    local sheet, quads = load_player_sheet_if_needed()
+    local sheet, quads, sleeping_sprite = load_player_sheet_if_needed()
+    local time_system = state.player.time_system or {}
+    local current_time = tonumber(time_system.time) or 0
+    local day_length = tonumber(time_system.DAY_LENGTH) or state.constants.time.day_length
+
+    if (current_time >= day_length - 1 or current_time <= 2) and sleeping_sprite then
+        local target_width = 36
+        local sprite_scale = target_width / sleeping_sprite:getWidth()
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(
+            sleeping_sprite,
+            foot_x,
+            foot_y,
+            0,
+            sprite_scale,
+            sprite_scale,
+            sleeping_sprite:getWidth() / 2,
+            sleeping_sprite:getHeight() / 2
+        )
+        return
+    end
+
     if not sheet or not quads then
         -- fallback if sprite sheet is missing or failed to load
         love.graphics.setColor(0.95, 0.95, 0.95, 1)

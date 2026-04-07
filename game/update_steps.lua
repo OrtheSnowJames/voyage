@@ -1,5 +1,6 @@
 local update_steps = {}
 local constants = require("game.constants")
+local time_utils = require("game.time_utils")
 local RECOVERY_BAY_MAX = constants.combat.recovery_bay_max or 15
 
 local function clear_catch_texts(state)
@@ -142,6 +143,18 @@ function update_steps.handle_back_to_menu_button(state)
     if suit.Button("Save & Return", {id = "menu"}, suit.layout:row(120, 30)).hit then
         state.player.name = state.system.menu.get_name()
         local data = state.system.game.get_saveable_data()
+        local time_system = data.time_system or {}
+        local day_length = tonumber(time_system.DAY_LENGTH) or state.constants.time.day_length
+        local unlock_time = time_utils.time_of("11:30", day_length) or ((11.5 / 12) * day_length)
+        local lock_time = time_utils.time_of("11:59", day_length) or (day_length - (day_length / (12 * 60)))
+        local current_time = tonumber(time_system.time) or 0
+
+        -- don't allow resetting progress before 11:30 once the threshold was reached
+        if current_time >= unlock_time then
+            time_system.time = lock_time
+            data.time_system = time_system
+        end
+
         state.system.serialize.save_data(data)
         state.system.gamestate.set(state.system.gametype.MENU)
         return true
