@@ -60,7 +60,7 @@ function minigame_module.create(deps)
     local function pick_for_quality(pool, quality_score)
         if quality_score >= 180 then
             return pool[#pool]
-        elseif quality_score >= 140 then
+        elseif quality_score >= 130 then
             local current_index = math.random(1, #pool)
             return pool[math.min(current_index + 1, #pool)]
         elseif quality_score >= 100 then

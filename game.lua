@@ -981,5 +981,11 @@ game.reset_state = reset_game
 -- make mobile control functions accessible to other modules
 game.handle_mobile_button_press = handle_mobile_button_press
 game.handle_mobile_button_release = handle_mobile_button_release
+game.set_mods_enabled = function(enabled)
+    mods.set_enabled(enabled)
+end
+game.are_mods_enabled = function()
+    return mods.is_enabled()
+end
 
 return game

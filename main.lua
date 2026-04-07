@@ -1,5 +1,6 @@
 local game = require("game")
 local menu = require("menu")
+local mod_terminal = require("game.mod_terminal")
 local suit = require "SUIT"
 local size = require("game.size")
 local gamestate = require("game.gamestate")
@@ -23,6 +24,8 @@ local CANVAS_WIDTH = size.CANVAS_WIDTH
 local CANVAS_HEIGHT = size.CANVAS_HEIGHT
 local USE_OFFSCREEN_CANVAS = true
 local runtime_error = nil
+local default_ui_font = nil
+local launcher = nil
 
 local function record_runtime_error(context, err)
     local trace = ""
@@ -71,10 +74,19 @@ function love.load()
         local window_width, window_height = love.graphics.getDimensions()
         recreate_canvas(window_width, window_height)
         math.randomseed(os.time())
+        default_ui_font = love.graphics.getFont()
 
         gamestate.set(GameType.MENU)
-        game.load()
-        menu.load()
+        launcher = mod_terminal.new({
+            on_start = function()
+                if default_ui_font then
+                    love.graphics.setFont(default_ui_font)
+                end
+                game.load()
+                menu.load()
+            end
+        })
+        launcher:setup()
     end, function(e) return e end)
     if not ok then
         record_runtime_error("load", err)
@@ -87,6 +99,10 @@ function love.update(dt)
     end
     local ok, err = xpcall(function()
         sync_canvas_dimensions_if_needed()
+        if launcher and launcher:is_active() then
+            launcher:update(dt)
+            return
+        end
 
         if game_states[gamestate.get()] then
             local next_state_str = game.update(dt)
@@ -131,6 +147,9 @@ function love.draw()
         pcall(love.graphics.setShader)
         pcall(love.graphics.setScissor)
         love.graphics.setColor(1, 1, 1, 1)
+        if default_ui_font then
+            love.graphics.setFont(default_ui_font)
+        end
 
         if USE_OFFSCREEN_CANVAS and canvas then
             -- set the canvas as the render target with stencil support
@@ -138,8 +157,9 @@ function love.draw()
             canvas:setFilter("nearest", "nearest")
             love.graphics.clear()
 
-            -- draw everything to the current canvas resolution
-            if game_states[gamestate.get()] then
+            if launcher and launcher:is_active() then
+                launcher:draw(CANVAS_WIDTH, CANVAS_HEIGHT)
+            elseif game_states[gamestate.get()] then
                 game.draw()
             elseif gamestate.get() == GameType.MENU then
                 menu.draw()
@@ -159,7 +179,9 @@ function love.draw()
         else
             -- Web fallback: draw directly in the current canvas size.
             love.graphics.clear(0, 0, 0, 1)
-            if game_states[gamestate.get()] then
+            if launcher and launcher:is_active() then
+                launcher:draw(CANVAS_WIDTH, CANVAS_HEIGHT)
+            elseif game_states[gamestate.get()] then
                 game.draw()
             elseif gamestate.get() == GameType.MENU then
                 menu.draw()
@@ -174,6 +196,10 @@ end
 
 -- add keyboard event handler for debug toggle
 function love.keypressed(key)
+    if launcher and launcher:keypressed(key) then
+        return
+    end
+
     if key == "f3" then
         game.toggleDebug()
     end
@@ -185,8 +211,12 @@ end
 
 -- add mouse event handlers for suit
 function love.mousepressed(x, y, button)
+    local canvas_x, canvas_y = love.windowToCanvas(x, y)
+    if launcher and launcher:mousepressed(canvas_x, canvas_y, button) then
+        return
+    end
+
     if button == 1 then  -- left mouse button
-        local canvas_x, canvas_y = love.windowToCanvas(x, y)
         suit.updateMouse(canvas_x, canvas_y, true)
         
         -- handle mobile button press
@@ -200,8 +230,11 @@ function love.mousepressed(x, y, button)
 end
 
 function love.mousereleased(x, y, button)
+    local canvas_x, canvas_y = love.windowToCanvas(x, y)
+    if launcher and launcher:mousereleased(canvas_x, canvas_y, button) then
+        return
+    end
     if button == 1 then  -- left mouse button
-        local canvas_x, canvas_y = love.windowToCanvas(x, y)
         suit.updateMouse(canvas_x, canvas_y, false)
         
         -- handle mobile button release
@@ -216,7 +249,28 @@ end
 
 function love.mousemoved(x, y)
     local canvas_x, canvas_y = love.windowToCanvas(x, y)
+    if launcher and launcher:mousemoved(canvas_x, canvas_y) then
+        return
+    end
     suit.updateMouse(canvas_x, canvas_y, love.mouse.isDown(1))
+end
+
+function love.wheelmoved(x, y)
+    if launcher and launcher:wheelmoved(x, y) then
+        return
+    end
+end
+
+function love.touchpressed(id, x, y, dx, dy, pressure)
+    local pixel_x = x * love.graphics.getWidth()
+    local pixel_y = y * love.graphics.getHeight()
+    love.mousepressed(pixel_x, pixel_y, 1)
+end
+
+function love.touchreleased(id, x, y, dx, dy, pressure)
+    local pixel_x = x * love.graphics.getWidth()
+    local pixel_y = y * love.graphics.getHeight()
+    love.mousereleased(pixel_x, pixel_y, 1)
 end
 
 -- add function to get ship name
@@ -243,6 +297,9 @@ function love.windowToCanvas(x, y)
 end
 
 function love.textinput(t)
+    if launcher and launcher:textinput(t) then
+        return
+    end
     suit.textinput(t)
 end
 
