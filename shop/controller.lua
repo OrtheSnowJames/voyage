@@ -2,6 +2,7 @@ local shop_state = require("shop.state")
 local main_ui = require("shop.ui.main")
 local transfer_ui = require("shop.ui.transfer")
 local inventory_ui = require("shop.ui.inventory")
+local top_bar = require("game.top")
 
 local controller = {}
 
@@ -20,6 +21,7 @@ local PORT_EXPORTS = {
     "has_shop_collision_at_y",
     "draw_main_dock",
     "resolve_boat_collisions",
+    "resolve_enemy_collisions",
     "draw_shops"
 }
 
@@ -114,8 +116,9 @@ function controller.create(deps)
 
         local window_width = size.CANVAS_WIDTH
         local window_height = size.CANVAS_HEIGHT
+        local top_offset = top_bar.get_height(window_height)
 
-        if suit.Button("Leave Shop", {id = "leave_shop"}, window_width - 132, 10, 122, 30).hit then
+        if suit.Button("Leave Shop", {id = "leave_shop"}, window_width - 132, top_offset + 10, 122, 30).hit then
             gamestate.set(GameType.VOYAGE)
             runtime_state.shop_reopen_requires_exit = true
             player_ship.pending_shop_interaction = false
@@ -142,6 +145,7 @@ function controller.create(deps)
             GameType = GameType,
             game_config = game_config
         }
+        ui_ctx.top_offset = top_offset
 
         if gamestate.get() == GameType.SHOP_TRANSFER then
             transfer_ui.render(ui_ctx)

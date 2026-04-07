@@ -2,6 +2,7 @@ local crew_management = {}
 local hunger = require("game.hunger")
 local shop = require("shop")
 local alert = require("game.alert")
+local top_bar = require("game.top")
 
 local panel_open = false
 
@@ -20,16 +21,19 @@ local ACTION_BOTTOM_PADDING = 20
 local function get_layout(size, mobile)
     local font = love.graphics.getFont()
     local font_height = font and font:getHeight() or 14
+    local top_offset = top_bar.get_height(size.CANVAS_HEIGHT)
     local center_x = math.floor(size.CANVAS_WIDTH / 2)
     local left_x = math.floor(center_x - ACTION_GAP - ACTION_WIDTH)
     local right_x = math.floor(center_x + ACTION_GAP)
     local toggle_x = size.CANVAS_WIDTH - TOGGLE_WIDTH - 12
     local toggle_y = size.CANVAS_HEIGHT - TOGGLE_HEIGHT - 12
-    local title_y = TITLE_TOP_PADDING
+    local title_y = top_offset + TITLE_TOP_PADDING
 
     if mobile and mobile.enabled then
         toggle_y = size.CANVAS_HEIGHT - mobile.button_size - mobile.button_spacing - TOGGLE_HEIGHT - 12
-        toggle_y = math.max(12, toggle_y)
+        toggle_y = math.max(top_offset + 12, toggle_y)
+    else
+        toggle_y = math.max(top_offset + 12, toggle_y)
     end
 
     local action_block_height = (ACTION_HEIGHT * 2) + ACTION_STACK_GAP

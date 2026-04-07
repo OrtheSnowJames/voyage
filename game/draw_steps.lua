@@ -2,6 +2,7 @@ local draw_steps = {}
 local hunger = require("game.hunger")
 local crew_management = require("game.crew_management")
 local action_display = require("game.action_display")
+local top_bar = require("game.top")
 
 local PLAYER_SHEET_PATH = "assets/Pirates Red Sprite Sheet.png"
 local SLEEPING_SPRITE_PATH = "assets/sleeping.png"
@@ -606,16 +607,7 @@ function draw_steps.draw_time_and_debug(state)
     local action_prompt_center_y = canvas_size.CANVAS_HEIGHT - action_prompt_bottom_margin - (action_prompt_height / 2)
 
     love.graphics.setColor(1, 1, 1, 1)
-    local time_of_day = (player_ship.time_system.time / player_ship.time_system.DAY_LENGTH) * 12
-    local hours = math.floor(time_of_day)
-    local minutes = math.floor((time_of_day - hours) * 60)
-    local fishing_level = state.constants.fishing_level
-    if hours >= 12 then
-        hours = 12
-        minutes = 0
-    end
-    love.graphics.print(string.format("Time: %02d:%02d", hours, minutes), 10, 10)
-    love.graphics.print(string.format("Fishing Level: %d", player_ship.y / fishing_level), 10, 30)
+    top_bar.draw(state)
     hunger.draw_hud(state)
     state.ui.alert.draw(state.system.size)
     mobile_controls.hide_fish_button = false
@@ -721,6 +713,22 @@ function draw_steps.draw_time_and_debug(state)
         end
 
         love.graphics.print("Debug Mode (F3 to toggle)", 10, 100)
+        local collision_count = tonumber(player_ship.debug_island_collision_count) or 0
+        local turnaround_count = tonumber(player_ship.debug_turnaround_trigger_count) or 0
+        local turn_timer = tonumber(player_ship.collision_turnaround_timer) or 0
+        local last_collision_time = tonumber(player_ship.debug_last_island_collision_time) or 0
+        local last_turn_time = tonumber(player_ship.debug_last_turnaround_time) or 0
+        local now = (love.timer and love.timer.getTime and love.timer.getTime()) or 0
+        local collision_age = last_collision_time > 0 and math.max(0, now - last_collision_time) or -1
+        local turn_age = last_turn_time > 0 and math.max(0, now - last_turn_time) or -1
+        local collision_age_text = collision_age >= 0 and string.format("%.2fs ago", collision_age) or "never"
+        local turn_age_text = turn_age >= 0 and string.format("%.2fs ago", turn_age) or "never"
+        love.graphics.print(
+            string.format("Island collisions: %d | Turnarounds: %d | Turn timer: %.2f", collision_count, turnaround_count, turn_timer),
+            10,
+            120
+        )
+        love.graphics.print("Last collision: " .. collision_age_text .. " | Last turnaround: " .. turn_age_text, 10, 140)
 
         if suit.Button("Toggle Mobile Controls", suit.layout:row(150, 30)).hit then
             mobile_controls.enabled = not mobile_controls.enabled
@@ -735,6 +743,34 @@ function draw_steps.draw_time_and_debug(state)
                 print(string.format("  [%d]: x=%.2f, y=%.2f", i, obj.x, obj.y))
             end
             print("------------------------")
+        end
+
+        if suit.Button("Spawn Enemy At Y", suit.layout:row(150, 30)).hit then
+            local ok = state.enemy.module.spawn_at_y(
+                state.camera,
+                player_ship.y,
+                player_ship.y
+            )
+            if ok then
+                print(string.format("Spawned enemy at y=%.2f", player_ship.y))
+            else
+                print("Could not spawn enemy (max enemies reached or invalid camera/y)")
+            end
+        end
+
+        if suit.Button("Print Collision Debug", suit.layout:row(150, 30)).hit then
+            print("--- collision debug ---")
+            print(string.format("Ship x=%.2f y=%.2f vx=%.2f vy=%.2f", player_ship.x or 0, player_ship.y or 0, player_ship.velocity_x or 0, player_ship.velocity_y or 0))
+            print(string.format("Island collisions=%d turnarounds=%d timer=%.3f",
+                tonumber(player_ship.debug_island_collision_count) or 0,
+                tonumber(player_ship.debug_turnaround_trigger_count) or 0,
+                tonumber(player_ship.collision_turnaround_timer) or 0
+            ))
+            print(string.format("Last collision center x=%.2f y=%.2f",
+                tonumber(player_ship.debug_last_island_collision_x) or 0,
+                tonumber(player_ship.debug_last_island_collision_y) or 0
+            ))
+            print("-----------------------")
         end
     end
 end

@@ -25,6 +25,7 @@ end
 local function render_fish_section(ctx, x, y, section_width)
     local suit = ctx.suit
     local runtime_state = ctx.runtime_state
+    local top_offset = math.max(0, tonumber(ctx.top_offset) or 0)
     local player_ship = ctx.player_ship
 
     suit.layout:reset(x, y)
@@ -252,6 +253,7 @@ function main_ui.render(ctx)
     local size = ctx.size
     local scrolling = ctx.scrolling
     local runtime_state = ctx.runtime_state
+    local top_offset = math.max(0, tonumber(ctx.top_offset) or 0)
 
     local window_width = size.CANVAS_WIDTH
     local window_height = size.CANVAS_HEIGHT
@@ -267,16 +269,16 @@ function main_ui.render(ctx)
 
     scrolling.update(runtime_state.main_shop_scroll, {
         viewport_x = 0,
-        viewport_y = 0,
+        viewport_y = top_offset,
         viewport_width = window_width,
-        viewport_height = window_height,
+        viewport_height = window_height - top_offset,
         content_height = content_height,
         reserve_scrollbar_space = true
     })
 
     local scroll_y = scrolling.get_offset_y(runtime_state.main_shop_scroll, true)
     local function sy(y)
-        return y + scroll_y
+        return top_offset + y + scroll_y
     end
 
     local grid_width = section_width * 3 + padding * 2

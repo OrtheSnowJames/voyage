@@ -3,6 +3,13 @@ local mods = {}
 local loaded_mods = {}
 local mods_enabled = true
 local file_enabled = {}
+local PREFS_PATH = "mods/preferences.lua"
+local IGNORED_MOD_FILES = {
+    ["preferences.lua"] = true
+}
+local IGNORED_MOD_PREFIXES = {
+    "not_mod/"
+}
 
 local function sorted_entries(path)
     local entries = love.filesystem.getDirectoryItems(path)
@@ -13,7 +20,18 @@ end
 local function sorted_lua_files(path)
     local files = {}
     for _, entry in ipairs(sorted_entries(path)) do
-        if entry:sub(-4) == ".lua" then
+        local entry_lower = entry:lower()
+        local ignored = IGNORED_MOD_FILES[entry_lower] == true
+        if not ignored then
+            for _, prefix in ipairs(IGNORED_MOD_PREFIXES) do
+                if entry_lower:sub(1, #prefix) == prefix then
+                    ignored = true
+                    break
+                end
+            end
+        end
+
+        if (not ignored) and entry:sub(-4) == ".lua" then
             table.insert(files, entry)
         end
     end
@@ -157,6 +175,67 @@ function mods.disable_all_files()
     for _, filename in ipairs(mods.list_mod_files()) do
         file_enabled[filename] = false
     end
+end
+
+function mods.save_preferences()
+    ensure_mods_directory()
+
+    local lines = {
+        "return {",
+        "  mods_enabled = " .. tostring(mods_enabled) .. ",",
+        "  file_enabled = {"
+    }
+
+    for _, filename in ipairs(mods.list_mod_files()) do
+        local enabled = mods.is_file_enabled(filename)
+        table.insert(lines, string.format("    [%q] = %s,", filename, tostring(enabled)))
+    end
+
+    table.insert(lines, "  }")
+    table.insert(lines, "}")
+
+    local ok, err = love.filesystem.write(PREFS_PATH, table.concat(lines, "\n"))
+    if not ok then
+        print("[mods] failed to save preferences: " .. tostring(err))
+        return false
+    end
+    return true
+end
+
+function mods.load_preferences()
+    ensure_mods_directory()
+
+    local info = love.filesystem.getInfo(PREFS_PATH, "file")
+    if not info then
+        return false
+    end
+
+    local chunk, load_err = love.filesystem.load(PREFS_PATH)
+    if not chunk then
+        print("[mods] failed to load preferences: " .. tostring(load_err))
+        return false
+    end
+
+    local ok, data = pcall(chunk)
+    if not ok or type(data) ~= "table" then
+        print("[mods] invalid preferences file")
+        return false
+    end
+
+    if data.mods_enabled ~= nil then
+        mods_enabled = data.mods_enabled ~= false
+    end
+
+    file_enabled = {}
+    if type(data.file_enabled) == "table" then
+        for name, enabled in pairs(data.file_enabled) do
+            if type(name) == "string" then
+                file_enabled[name] = enabled ~= false
+            end
+        end
+    end
+
+    return true
 end
 
 return mods

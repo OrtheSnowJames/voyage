@@ -7,6 +7,7 @@ mod_terminal.__index = mod_terminal
 local LAUNCH_TOTAL_DURATION = 2.0
 local LAUNCH_TEXT_FADE_DURATION = 0.2
 local LAUNCH_BG_FADE_DURATION = 0.2
+local WEB_QUIT_REDIRECT_URL = "http://waffledogz.us"
 local scanline_shader = nil
 
 local function get_scanline_shader()
@@ -154,6 +155,7 @@ function mod_terminal:print_help()
     self:push("  disable all")
     self:push("  start")
     self:push("  run")
+    self:push("  exit")
 end
 
 function mod_terminal:finish_and_start()
@@ -185,6 +187,7 @@ function mod_terminal:setup()
 
     mods.set_enabled(true)
     mods.enable_all_files()
+    mods.load_preferences()
     local files = mods.list_mod_files()
     if #files == 0 then
         self:finish_and_start()
@@ -194,7 +197,6 @@ function mod_terminal:setup()
     self:push("Linux 5.4.0-voyage #1 SMP PREEMPT")
     self:push("All rights reserved.")
     self:push("")
-    self:push("Voyage Mod Control Terminal")
     self:push(self.prompt .. "help")
     self:print_help()
     self:push("")
@@ -219,6 +221,7 @@ function mod_terminal:apply_enable_all(enabled)
         mods.disable_all_files()
         self:push("disabled all mods")
     end
+    mods.save_preferences()
 end
 
 function mod_terminal:run_command(raw)
@@ -248,6 +251,15 @@ function mod_terminal:run_command(raw)
         return
     end
 
+    if lower == "exit" then
+        if love.system.getOS() == "Web" then
+            love.system.openURL(WEB_QUIT_REDIRECT_URL)
+            return
+        end
+        love.event.quit()
+        return
+    end
+
     if (action == "enable" or action == "disable") and arg and arg:lower() == "all" then
         self:apply_enable_all(action == "enable")
         return
@@ -267,6 +279,7 @@ function mod_terminal:run_command(raw)
         end
         mods.set_enabled(true)
         mods.set_file_enabled(chosen, action == "enable")
+        mods.save_preferences()
         self:push(string.format("%s %s", action == "enable" and "enabled" or "disabled", chosen))
         return
     end
@@ -281,7 +294,7 @@ function mod_terminal:autocomplete_input()
         return
     end
 
-    local commands = {"help", "list", "enable", "disable", "start", "run"}
+    local commands = {"help", "list", "enable", "disable", "start", "run", "exit"}
 
     if not text:find("%s") then
         self.input = autocomplete_ci(text, commands)

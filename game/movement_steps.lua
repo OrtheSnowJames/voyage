@@ -138,6 +138,52 @@ function movement_steps.update_player_ship(self, dt, ctx)
         return
     end
 
+    -- Collision turnaround behavior (triggered by island collision in shop/port.lua):
+    -- stop briefly, rotate away from island, then force a short retreat.
+    if (tonumber(self.collision_turnaround_timer) or 0) > 0 then
+        local timer = tonumber(self.collision_turnaround_timer) or 0
+        timer = math.max(0, timer - dt)
+        self.collision_turnaround_timer = timer
+
+        local target = tonumber(self.collision_turnaround_target_rotation) or self.rotation
+        self.target_rotation = target
+        local rotation_diff = self.target_rotation - self.rotation
+        self.rotation = self.rotation + rotation_diff * 6 * dt
+
+        if timer > 0.5 then
+            self.velocity_x = 0
+            self.velocity_y = 0
+        elseif timer > 0.22 then
+            self.velocity_x = (self.velocity_x or 0) * 0.5
+            self.velocity_y = (self.velocity_y or 0) * 0.5
+        else
+            local away_x = tonumber(self.collision_turnaround_away_x) or math.cos(target)
+            local away_y = tonumber(self.collision_turnaround_away_y) or math.sin(target)
+            local retreat_speed = math.max(90, (tonumber(self.max_speed) or 180) * 0.45)
+            self.velocity_x = away_x * retreat_speed
+            self.velocity_y = away_y * retreat_speed
+        end
+
+        local new_x = self.x + (self.velocity_x or 0) * dt
+        local new_y = self.y + (self.velocity_y or 0) * dt
+        local min_shore_distance = 40
+        if new_y <= ctx.shore_division + min_shore_distance then
+            new_y = ctx.shore_division + min_shore_distance
+            self.velocity_y = math.max(0, self.velocity_y or 0)
+        end
+        self.x = new_x
+        self.y = new_y
+
+        if timer <= 0 then
+            self.collision_turnaround_target_rotation = nil
+            self.collision_turnaround_away_x = nil
+            self.collision_turnaround_away_y = nil
+        end
+
+        ctx.update_ship_animation(dt)
+        return
+    end
+
     local turning = false
     if love.keyboard.isDown("a") or mobile_controls.buttons.left.pressed then
         self.target_rotation = self.target_rotation - self.turn_speed * dt

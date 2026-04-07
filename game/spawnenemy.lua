@@ -27,6 +27,7 @@ local enemies = {}  -- table to store active enemies
 local spawn_timer = 0
 local corruption_level = 0
 local pull_radius = 0
+local shop_module_cache = nil
 
 local function normalize_angle(angle)
     while angle > math.pi do
@@ -124,6 +125,42 @@ local function calculate_enemy_speed(y_position, is_dangerous_area)
     return BASE_ENEMY_SPEED * speed_multiplier
 end
 
+local function build_enemy_spawn(camera, spawn_y, size_source_y, spawn_side)
+    local view_width = size.CANVAS_WIDTH / camera.scale
+    local resolved_side = spawn_side
+    if resolved_side ~= "left" and resolved_side ~= "right" then
+        resolved_side = (math.random() < 0.5) and "left" or "right"
+    end
+
+    local spawn_x
+    local direction
+    if resolved_side == "left" then
+        spawn_x = camera.x - SPAWN_MARGIN
+        direction = 1
+    else
+        spawn_x = camera.x + view_width + SPAWN_MARGIN
+        direction = -1
+    end
+
+    local dangerous = is_dangerous_area(spawn_y)
+    local enemy_speed = calculate_enemy_speed(spawn_y, dangerous)
+    local enemy_size_source = tonumber(size_source_y) or spawn_y
+    local enemy = {
+        x = spawn_x,
+        y = spawn_y,
+        direction = direction,
+        heading = direction > 0 and 0 or math.pi,
+        turn_rate = 1.2 + love.math.random() * 1.0,
+        size = generate_enemy_size(enemy_size_source),
+        radius = ENEMY_SIZE,
+        speed = enemy_speed,
+        last_ripple_pos = {x = spawn_x, y = spawn_y}
+    }
+
+    table.insert(enemies, enemy)
+    return enemy, dangerous
+end
+
 function spawnenemy.update(dt, camera, player_x, player_y)
     -- calculate viewport boundaries
     local view_width = size.CANVAS_WIDTH / camera.scale
@@ -153,18 +190,6 @@ function spawnenemy.update(dt, camera, player_x, player_y)
         if #enemies < MAX_ENEMIES_ON_SCREEN then
             print("DEBUG: Attempting to spawn enemy (enemy count: " .. #enemies .. "/" .. MAX_ENEMIES_ON_SCREEN .. ")")
             -- randomly choose left or right side for spawning
-            local spawn_side = math.random() < 0.5 and "left" or "right"
-            local spawn_x
-            local direction
-            
-            if spawn_side == "left" then
-                spawn_x = camera.x - SPAWN_MARGIN
-                direction = 1  -- moving right
-            else
-                spawn_x = camera.x + view_width + SPAWN_MARGIN
-                direction = -1  -- moving left
-            end
-            
             -- calculate valid y range for spawning
             local min_y = math.max(200, camera.y)  -- minimum y position (at least 200)
             local max_y = camera.y + view_height - SPAWN_MARGIN  -- maximum y position (within view)
@@ -228,26 +253,13 @@ function spawnenemy.update(dt, camera, player_x, player_y)
             print("DEBUG: Final spawn_y value: " .. (spawn_y or "nil"))
             
             -- only spawn if we found a valid position
-            if spawn_y then
+                if spawn_y then
                     print("DEBUG: Spawn position found at Y=" .. spawn_y .. ", proceeding with enemy creation")
-                    -- calculate speed based on depth and area danger
-                    local enemy_speed = calculate_enemy_speed(spawn_y, is_dangerous)
-                    
-                    -- create new enemy
-                    table.insert(enemies, {
-                        x = spawn_x,
-                        y = spawn_y,
-                        direction = direction,
-                        heading = direction > 0 and 0 or math.pi,
-                        turn_rate = 1.2 + love.math.random() * 1.0,
-                        size = generate_enemy_size(player_y),
-                        radius = ENEMY_SIZE,
-                        speed = enemy_speed,  -- store individual enemy speed
-                        last_ripple_pos = {x = spawn_x, y = spawn_y}
-                    })
+                    local _, spawned_in_danger = build_enemy_spawn(camera, spawn_y, player_y)
+                    local enemy_speed = enemies[#enemies] and enemies[#enemies].speed or 0
                     
                     -- print spawn info for debugging
-                    if is_dangerous then
+                    if spawned_in_danger then
                         -- check if this was a divider line spawn
                         local is_divider_line = false
                         for _, line_y in ipairs(valid_lines or {}) do
@@ -273,36 +285,75 @@ function spawnenemy.update(dt, camera, player_x, player_y)
     -- update enemy positions and remove off-screen enemies
     for i = #enemies, 1, -1 do
         local enemy = enemies[i]
+        local turnaround_timer = tonumber(enemy.collision_turnaround_timer) or 0
 
-        local default_heading = enemy.direction > 0 and 0 or math.pi
-        local desired_heading = default_heading
+        if turnaround_timer > 0 then
+            turnaround_timer = math.max(0, turnaround_timer - dt)
+            enemy.collision_turnaround_timer = turnaround_timer
 
-        local player_on_shop_line = is_near_shop_line(player_y)
-        local enemy_in_spawn_blocked_area = is_near_shop(enemy.y)
-        local can_follow_player =
-            corruption_level >= 0.1 and
-            pull_radius > 0 and
-            not player_on_shop_line and
-            not enemy_in_spawn_blocked_area
-        if can_follow_player then
-            local dx = player_x - enemy.x
-            local dy = player_y - enemy.y
-            local distance_to_player = math.sqrt(dx * dx + dy * dy)
+            local default_heading = enemy.direction > 0 and 0 or math.pi
+            local target_heading = tonumber(enemy.collision_turnaround_target_heading) or default_heading
+            enemy.heading = turn_towards(enemy.heading or default_heading, target_heading, (enemy.turn_rate or 1.5) * 4 * dt)
 
-            if distance_to_player <= pull_radius then
-                desired_heading = math.atan2(dy, dx)
+            if turnaround_timer > 0.5 then
+                -- stop
+            elseif turnaround_timer > 0.22 then
+                local drift_speed = (tonumber(enemy.speed) or 0) * 0.2
+                enemy.x = enemy.x + math.cos(enemy.heading) * drift_speed * dt
+                enemy.y = enemy.y + math.sin(enemy.heading) * drift_speed * dt
+            else
+                local away_x = tonumber(enemy.collision_turnaround_away_x) or math.cos(target_heading)
+                local away_y = tonumber(enemy.collision_turnaround_away_y) or math.sin(target_heading)
+                local retreat_speed = math.max(90, (tonumber(enemy.speed) or 140) * 0.55)
+                enemy.x = enemy.x + away_x * retreat_speed * dt
+                enemy.y = enemy.y + away_y * retreat_speed * dt
             end
-        end
 
-        if player_on_shop_line then
-            enemy.heading = default_heading
+            enemy.direction = math.cos(enemy.heading) >= 0 and 1 or -1
+            if turnaround_timer <= 0 then
+                enemy.collision_turnaround_target_heading = nil
+                enemy.collision_turnaround_away_x = nil
+                enemy.collision_turnaround_away_y = nil
+            end
         else
-            enemy.heading = turn_towards(enemy.heading or default_heading, desired_heading, (enemy.turn_rate or 1.5) * dt)
+
+            local default_heading = enemy.direction > 0 and 0 or math.pi
+            local desired_heading = default_heading
+
+            local player_on_shop_line = is_near_shop_line(player_y)
+            local enemy_in_spawn_blocked_area = is_near_shop(enemy.y)
+            local can_follow_player =
+                corruption_level >= 0.1 and
+                pull_radius > 0 and
+                not player_on_shop_line and
+                not enemy_in_spawn_blocked_area
+            if can_follow_player then
+                local dx = player_x - enemy.x
+                local dy = player_y - enemy.y
+                local distance_to_player = math.sqrt(dx * dx + dy * dy)
+
+                if distance_to_player <= pull_radius then
+                    desired_heading = math.atan2(dy, dx)
+                end
+            end
+
+            if player_on_shop_line then
+                enemy.heading = default_heading
+            else
+                enemy.heading = turn_towards(enemy.heading or default_heading, desired_heading, (enemy.turn_rate or 1.5) * dt)
+            end
+
+            enemy.direction = math.cos(enemy.heading) >= 0 and 1 or -1
+            enemy.x = enemy.x + math.cos(enemy.heading) * enemy.speed * dt
+            enemy.y = enemy.y + math.sin(enemy.heading) * enemy.speed * dt
         end
 
-        enemy.direction = math.cos(enemy.heading) >= 0 and 1 or -1
-        enemy.x = enemy.x + math.cos(enemy.heading) * enemy.speed * dt
-        enemy.y = enemy.y + math.sin(enemy.heading) * enemy.speed * dt
+        if not shop_module_cache then
+            shop_module_cache = require("shop")
+        end
+        if shop_module_cache and shop_module_cache.resolve_enemy_collisions then
+            shop_module_cache.resolve_enemy_collisions(enemy)
+        end
         
         -- check if enemy is far off screen
         if enemy.x < camera.x - DESPAWN_MARGIN or enemy.x > camera.x + view_width + DESPAWN_MARGIN then
@@ -406,6 +457,19 @@ end
 function spawnenemy.set_corruption_state(level, radius)
     corruption_level = math.max(0, tonumber(level) or 0)
     pull_radius = math.max(0, tonumber(radius) or 0)
+end
+
+function spawnenemy.spawn_at_y(camera, spawn_y, size_source_y, spawn_side)
+    local y_value = tonumber(spawn_y)
+    if not camera or type(camera) ~= "table" or not y_value then
+        return false
+    end
+    if #enemies >= MAX_ENEMIES_ON_SCREEN then
+        return false
+    end
+
+    build_enemy_spawn(camera, y_value, size_source_y, spawn_side)
+    return true
 end
 
 return spawnenemy

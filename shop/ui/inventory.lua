@@ -32,15 +32,16 @@ function inventory_ui.render(ctx)
     local inventory_state = runtime_state.inventory
     local window_width = size.CANVAS_WIDTH
     local window_height = size.CANVAS_HEIGHT
+    local top_offset = math.max(0, tonumber(ctx.top_offset) or 0)
 
-    suit.layout:reset(window_width / 2 - 300, 50)
+    suit.layout:reset(window_width / 2 - 300, top_offset + 50)
     suit.Label("Fish Inventory", {align = "center"}, suit.layout:row(600, 40))
 
     local inventory_counts, unique_inventory = build_unique_inventory(player_ship)
     local items_per_page = 12
     local max_scroll = math.max(0, #unique_inventory - items_per_page)
 
-    suit.layout:reset(window_width / 2 - 200, 120)
+    suit.layout:reset(window_width / 2 - 200, top_offset + 120)
     if #unique_inventory == 0 then
         suit.Label("Inventory is empty", {align = "center"}, suit.layout:row(400, 30))
     else
@@ -54,7 +55,7 @@ function inventory_ui.render(ctx)
 
         local start_index = inventory_state.scroll_offset + 1
         local end_index = math.min(start_index + items_per_page - 1, #unique_inventory)
-        local current_y = 180
+        local current_y = top_offset + 180
 
         for i = start_index, end_index do
             local fish_name = unique_inventory[i]

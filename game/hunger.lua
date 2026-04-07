@@ -1,5 +1,6 @@
 local hunger = {}
 local alert = require("game.alert")
+local top_bar = require("game.top")
 
 local function sync_hunger_levels(player_ship, hunger_config)
     local crew_count = math.max(0, math.floor(tonumber(player_ship.men) or 0))
@@ -404,29 +405,24 @@ function hunger.draw_hud(state)
         mods_count = tonumber(state.mods.count) or 0
     end
 
-    local lowest_hunger = get_lowest_hunger(player_ship.hunger_levels)
-    if lowest_hunger then
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.print(string.format("Lowest Hunger: %d%%", math.floor(lowest_hunger + 0.5)), 10, 50)
-
-        local half_hunger_threshold = hunger_config.max * hunger_config.half_threshold
-        if has_hungry_crew(player_ship.hunger_levels, half_hunger_threshold) then
-            love.graphics.setColor(1, 0.1, 0.1, 1)
-            love.graphics.circle("fill", 150, 58, 5)
-            love.graphics.setColor(1, 1, 1, 1)
-        end
-    end
-
     love.graphics.setColor(1, 1, 1, 1)
     if mods_count > 0 then
-        love.graphics.print(string.format("Mods: %d", mods_count), 10, 70)
+        love.graphics.print(string.format("Mods: %d", mods_count), 10, 50)
     else
-        love.graphics.print("no mods", 10, 70)
+        local no_mods_text = "no mods"
+        local font = love.graphics.getFont()
+        local text_width = font:getWidth(no_mods_text)
+        local top_offset = top_bar.get_height(state.system.size.CANVAS_HEIGHT)
+        love.graphics.print(
+            no_mods_text,
+            (state.system.size.CANVAS_WIDTH - text_width) / 2,
+            top_offset + 8
+        )
     end
 
     if state.system and state.system.serialize and state.system.serialize.was_tampered and state.system.serialize.was_tampered() then
         love.graphics.setColor(1, 0.3, 0.3, 1)
-        love.graphics.print("Save file tampered", 10, 90)
+        love.graphics.print("Save file tampered", 10, 70)
         love.graphics.setColor(1, 1, 1, 1)
     end
 

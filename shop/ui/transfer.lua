@@ -49,26 +49,27 @@ function transfer_ui.render(ctx)
     local inventory_state = runtime_state.inventory
     local window_width = size.CANVAS_WIDTH
     local window_height = size.CANVAS_HEIGHT
+    local top_offset = math.max(0, tonumber(ctx.top_offset) or 0)
 
-    suit.layout:reset(window_width / 2 - 300, 50)
+    suit.layout:reset(window_width / 2 - 300, top_offset + 50)
     suit.Label("Transfer Fish to Inventory (5 coins each)", {align = "center"}, suit.layout:row(600, 30))
     suit.Label("Current Coins: " .. string.format("%.1f", runtime_state.coins), {align = "center"}, suit.layout:row(600, 30))
 
-    suit.layout:reset(window_width / 2 - 200, 120)
+    suit.layout:reset(window_width / 2 - 200, top_offset + 120)
     suit.Label("Search fish:", {align = "left"}, suit.layout:row(400, 30))
     local input_result = suit.Input(inventory_state.search_text, suit.layout:row(400, 30))
     if input_result.submitted or input_result.changed then
         refresh_filtered_fish(player_ship, inventory_state, inventory_utils)
     end
 
-    suit.layout:reset(window_width / 2 - 200, 200)
+    suit.layout:reset(window_width / 2 - 200, top_offset + 200)
     suit.Label("Select fish to transfer:", {align = "left"}, suit.layout:row(400, 30))
 
     local unique_fish, fish_counts = get_unique_fish_with_counts(inventory_state.filtered_fish)
     local items_per_page = 10
     local max_scroll = math.max(0, #unique_fish - items_per_page)
     local list_x = window_width / 2 - 200
-    local current_y = 230
+    local current_y = top_offset + 230
 
     suit.layout:reset(list_x, current_y)
     if inventory_state.scroll_offset > 0 then

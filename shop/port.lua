@@ -659,6 +659,8 @@ function port.create(deps)
     local function push_boat_out_of_circle(player_ship, cx, cy, extra_radius)
         local boat_radius = tonumber(player_ship.radius) or 20
         local min_dist = math.max(1, (tonumber(extra_radius) or 0) + boat_radius)
+        local pre_vx = tonumber(player_ship.velocity_x) or 0
+        local pre_vy = tonumber(player_ship.velocity_y) or 0
         local dx = (player_ship.x or 0) - cx
         local dy = (player_ship.y or 0) - cy
         local dist_sq = (dx * dx) + (dy * dy)
@@ -675,10 +677,81 @@ function port.create(deps)
         local nx = dx / dist
         local ny = dy / dist
 
+        local now = (love.timer and love.timer.getTime and love.timer.getTime()) or 0
+        player_ship.debug_island_collision_count = (tonumber(player_ship.debug_island_collision_count) or 0) + 1
+        player_ship.debug_last_island_collision_time = now
+        player_ship.debug_last_island_collision_x = cx
+        player_ship.debug_last_island_collision_y = cy
+
         player_ship.x = cx + (nx * min_dist)
         player_ship.y = cy + (ny * min_dist)
         player_ship.velocity_x = (player_ship.velocity_x or 0) * 0.2
         player_ship.velocity_y = (player_ship.velocity_y or 0) * 0.2
+
+        -- safety behavior: if the boat is heading into the island, queue a
+        -- short turnaround sequence (stop -> turn away -> move back out).
+        local vx = pre_vx
+        local vy = pre_vy
+        local speed_sq = (vx * vx) + (vy * vy)
+        if speed_sq > 1 and not player_ship.collision_turnaround_timer then
+            local to_center_x = cx - (player_ship.x or 0)
+            local to_center_y = cy - (player_ship.y or 0)
+            local toward_dot = (vx * to_center_x) + (vy * to_center_y)
+            if toward_dot > 0 then
+                player_ship.collision_turnaround_timer = 0.8
+                player_ship.collision_turnaround_target_rotation = math.atan2(ny, nx)
+                player_ship.collision_turnaround_away_x = nx
+                player_ship.collision_turnaround_away_y = ny
+                player_ship.debug_turnaround_trigger_count = (tonumber(player_ship.debug_turnaround_trigger_count) or 0) + 1
+                player_ship.debug_last_turnaround_time = now
+            end
+        end
+        return true
+    end
+
+    local function push_enemy_out_of_circle(enemy, cx, cy, extra_radius)
+        if not enemy then
+            return false
+        end
+
+        local enemy_radius = tonumber(enemy.radius) or 20
+        local min_dist = math.max(1, (tonumber(extra_radius) or 0) + enemy_radius)
+        local dx = (enemy.x or 0) - cx
+        local dy = (enemy.y or 0) - cy
+        local dist_sq = (dx * dx) + (dy * dy)
+        if dist_sq >= (min_dist * min_dist) then
+            return false
+        end
+
+        local dist = math.sqrt(dist_sq)
+        if dist <= 0.0001 then
+            dx = 1
+            dy = 0
+            dist = 1
+        end
+        local nx = dx / dist
+        local ny = dy / dist
+
+        enemy.x = cx + (nx * min_dist)
+        enemy.y = cy + (ny * min_dist)
+
+        if not enemy.collision_turnaround_timer then
+            local heading = tonumber(enemy.heading) or ((enemy.direction or 1) > 0 and 0 or math.pi)
+            local speed = tonumber(enemy.speed) or 0
+            local vx = math.cos(heading) * speed
+            local vy = math.sin(heading) * speed
+            local to_center_x = cx - (enemy.x or 0)
+            local to_center_y = cy - (enemy.y or 0)
+            local toward_dot = (vx * to_center_x) + (vy * to_center_y)
+
+            if toward_dot > 0 then
+                enemy.collision_turnaround_timer = 0.8
+                enemy.collision_turnaround_target_heading = math.atan2(ny, nx)
+                enemy.collision_turnaround_away_x = nx
+                enemy.collision_turnaround_away_y = ny
+            end
+        end
+
         return true
     end
 
@@ -763,14 +836,14 @@ function port.create(deps)
             if shop_data.is_spawned then
                 local dock_geometry = get_port_shop_dock_geometry(shop_data, index)
 
-                if not is_boat_in_port_dock_lane(player_ship, dock_geometry) then
-                    push_boat_out_of_circle(
-                        player_ship,
-                        dock_geometry.island_center_x,
-                        dock_geometry.island_center_y,
-                        dock_geometry.island_radius
-                    )
-                end
+                -- Always enforce island collision. Dock lane should allow docking,
+                -- not passing through the island body.
+                push_boat_out_of_circle(
+                    player_ship,
+                    dock_geometry.island_center_x,
+                    dock_geometry.island_center_y,
+                    dock_geometry.island_radius
+                )
                 push_boat_out_of_oriented_rect(player_ship, dock_geometry, 0)
             end
         end
@@ -784,6 +857,24 @@ function port.create(deps)
                 local dock_height = math.max(18, dock_y - dock_top_y)
                 push_boat_out_of_rect(player_ship, dock_x - (dock_width / 2), dock_top_y, dock_width, dock_height, 0)
                 push_boat_out_of_circle(player_ship, dock_x, dock_y - 8, 16)
+            end
+        end
+    end
+
+    function api.resolve_enemy_collisions(enemy)
+        if not enemy then
+            return
+        end
+
+        for index, shop_data in ipairs(port_a_shops) do
+            if shop_data.is_spawned then
+                local dock_geometry = get_port_shop_dock_geometry(shop_data, index)
+                push_enemy_out_of_circle(
+                    enemy,
+                    dock_geometry.island_center_x,
+                    dock_geometry.island_center_y,
+                    dock_geometry.island_radius
+                )
             end
         end
     end
