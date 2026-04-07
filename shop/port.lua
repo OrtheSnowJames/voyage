@@ -1,5 +1,17 @@
 local port = {}
 
+local function ray_x_at_y(x0, y0, theta, targetY)
+    local dy = math.sin(theta)
+
+    -- avoid divide by zero (horizontal ray)
+    if math.abs(dy) < 0.00001 then
+        return nil
+    end
+
+    local t = (targetY - y0) / dy
+    return x0 + math.cos(theta) * t
+end
+
 function port.create(deps)
     local constants = deps.constants
     local size = deps.size
@@ -115,59 +127,124 @@ function port.create(deps)
         return cached
     end
 
-    local function get_port_shop_dock_rect(center_x, center_y, island_radius)
-        local dock_x = center_x - (PORT_DOCK_WIDTH / 2)
-        local dock_y = center_y - island_radius - PORT_DOCK_HEIGHT + PORT_DOCK_TOP_OVERLAP
-        return dock_x, dock_y, PORT_DOCK_WIDTH, PORT_DOCK_HEIGHT
-    end
-
-    local function draw_port_shop_dock(center_x, center_y, island_radius)
-        local dock_x, dock_y, dock_width, dock_height = get_port_shop_dock_rect(center_x, center_y, island_radius)
-
-        love.graphics.setColor(0.45, 0.29, 0.15, 1)
-        love.graphics.rectangle("fill", dock_x, dock_y, dock_width, dock_height)
-        love.graphics.setColor(0.62, 0.41, 0.22, 1)
-        love.graphics.rectangle("line", dock_x, dock_y, dock_width, dock_height)
-        love.graphics.setColor(1, 1, 1, 1)
-    end
-
     local function get_port_island_center(shop_data)
         return shop_data.x, shop_data.y + 24
     end
 
-    local function get_port_shop_dock_position(shop_data, index)
+    local function get_port_shop_dock_angle(shop_data)
+        return tonumber(shop_data and shop_data.dock_angle) or (-math.pi * 0.5)
+    end
+
+    local function get_port_shop_dock_geometry(shop_data, index)
         local island = get_cached_port_shop_island(index)
+        local island_radius = island.radius or 44
         local cx, cy = get_port_island_center(shop_data)
-        local dock_x, dock_y, dock_w, dock_h = get_port_shop_dock_rect(cx, cy, island.radius)
-        return dock_x + (dock_w / 2), dock_y + dock_h
+        local angle = get_port_shop_dock_angle(shop_data)
+        local forward_x = math.cos(angle)
+        local forward_y = math.sin(angle)
+        local side_x = -forward_y
+        local side_y = forward_x
+        local half_w = PORT_DOCK_WIDTH * 0.5
+        local half_h = PORT_DOCK_HEIGHT * 0.5
+        local center_distance = island_radius - PORT_DOCK_TOP_OVERLAP + half_h
+        local center_x = cx + forward_x * center_distance
+        local center_y = cy + forward_y * center_distance
+        local inner_x = center_x - forward_x * half_h
+        local inner_y = center_y - forward_y * half_h
+        local tip_x = center_x + forward_x * half_h
+        local tip_y = center_y + forward_y * half_h
+
+        return {
+            center_x = center_x,
+            center_y = center_y,
+            inner_x = inner_x,
+            inner_y = inner_y,
+            tip_x = tip_x,
+            tip_y = tip_y,
+            forward_x = forward_x,
+            forward_y = forward_y,
+            side_x = side_x,
+            side_y = side_y,
+            half_w = half_w,
+            half_h = half_h,
+            island_center_x = cx,
+            island_center_y = cy,
+            island_radius = island_radius
+        }
     end
 
-    local function is_boat_in_port_dock_lane(player_ship, dock_x, dock_y, dock_width)
+    local function draw_port_shop_dock(geometry)
+        local cx = geometry.center_x
+        local cy = geometry.center_y
+        local fx = geometry.forward_x
+        local fy = geometry.forward_y
+        local sx = geometry.side_x
+        local sy = geometry.side_y
+        local hw = geometry.half_w
+        local hh = geometry.half_h
+
+        local p1x = cx - (sx * hw) - (fx * hh)
+        local p1y = cy - (sy * hw) - (fy * hh)
+        local p2x = cx + (sx * hw) - (fx * hh)
+        local p2y = cy + (sy * hw) - (fy * hh)
+        local p3x = cx + (sx * hw) + (fx * hh)
+        local p3y = cy + (sy * hw) + (fy * hh)
+        local p4x = cx - (sx * hw) + (fx * hh)
+        local p4y = cy - (sy * hw) + (fy * hh)
+
+        love.graphics.setColor(0.45, 0.29, 0.15, 1)
+        love.graphics.polygon("fill", p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y)
+        love.graphics.setColor(0.62, 0.41, 0.22, 1)
+        love.graphics.polygon("line", p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y)
+        love.graphics.setColor(1, 1, 1, 1)
+    end
+
+    local function get_port_shop_dock_position(shop_data, index)
+        local geometry = get_port_shop_dock_geometry(shop_data, index)
+        return geometry.inner_x, geometry.inner_y
+    end
+
+    local function project_point_on_dock_axes(px, py, geometry, origin_x, origin_y)
+        local ox = origin_x or geometry.center_x
+        local oy = origin_y or geometry.center_y
+        local dx = px - ox
+        local dy = py - oy
+        local forward = (dx * geometry.forward_x) + (dy * geometry.forward_y)
+        local side = (dx * geometry.side_x) + (dy * geometry.side_y)
+        return forward, side
+    end
+
+    local function is_boat_in_port_dock_lane(player_ship, geometry)
         local boat_radius = tonumber(player_ship.radius) or 20
-        local lane_half_width = (dock_width * 0.5) + (boat_radius * 0.75) + 4
-        local lane_min_y = dock_y - boat_radius - 8
-        local lane_max_y = dock_y + math.max(DOCK_INTERACTION_RANGE, boat_radius + 12)
+        local lane_half_width = geometry.half_w + (boat_radius * 0.75) + 4
+        local lane_min = -boat_radius - 8
+        local lane_max = math.max(DOCK_INTERACTION_RANGE, boat_radius + 12)
+        local px = player_ship.x or 0
+        local py = player_ship.y or 0
+        local forward_proj, side_proj = project_point_on_dock_axes(px, py, geometry, geometry.inner_x, geometry.inner_y)
+        local approach_dist = -forward_proj
 
-        return math.abs((player_ship.x or 0) - dock_x) <= lane_half_width
-            and (player_ship.y or 0) >= lane_min_y
-            and (player_ship.y or 0) <= lane_max_y
+        return math.abs(side_proj) <= lane_half_width
+            and approach_dist >= lane_min
+            and approach_dist <= lane_max
     end
 
-    local function squared_distance_to_rect(px, py, rect_x, rect_y, rect_w, rect_h)
-        local nearest_x = math.max(rect_x, math.min(px, rect_x + rect_w))
-        local nearest_y = math.max(rect_y, math.min(py, rect_y + rect_h))
-        local dx = px - nearest_x
-        local dy = py - nearest_y
-        return (dx * dx) + (dy * dy)
+    local function squared_distance_to_oriented_rect(px, py, geometry)
+        local forward_proj, side_proj = project_point_on_dock_axes(px, py, geometry)
+        local nearest_forward = math.max(-geometry.half_h, math.min(forward_proj, geometry.half_h))
+        local nearest_side = math.max(-geometry.half_w, math.min(side_proj, geometry.half_w))
+        local df = forward_proj - nearest_forward
+        local ds = side_proj - nearest_side
+        return (df * df) + (ds * ds)
     end
 
-    local function is_boat_touching_port_dock(player_ship, rect_x, rect_y, rect_w, rect_h)
+    local function is_boat_touching_port_dock(player_ship, geometry)
         local boat_radius = tonumber(player_ship.radius) or 20
         local px = player_ship.x or 0
         local py = player_ship.y or 0
         local touch_padding = 8
         local max_dist = boat_radius + touch_padding
-        local dist_sq = squared_distance_to_rect(px, py, rect_x, rect_y, rect_w, rect_h)
+        local dist_sq = squared_distance_to_oriented_rect(px, py, geometry)
         return dist_sq <= (max_dist * max_dist)
     end
 
@@ -309,23 +386,27 @@ function port.create(deps)
 
         for index, shop_data in ipairs(port_a_shops) do
             if shop_data.is_spawned then
-                local island = get_cached_port_shop_island(index)
-                local cx, cy = get_port_island_center(shop_data)
-                local dock_rect_x, dock_rect_y, dock_rect_w, dock_rect_h = get_port_shop_dock_rect(cx, cy, island.radius)
                 local dock_x, dock_y = get_port_shop_dock_position(shop_data, index)
+                local dock_geometry = get_port_shop_dock_geometry(shop_data, index)
 
                 local qualifies = false
                 local score = nil
 
-                if is_boat_touching_port_dock(player_ship, dock_rect_x, dock_rect_y, dock_rect_w, dock_rect_h) then
+                if is_boat_touching_port_dock(player_ship, dock_geometry) then
                     local dx = (player_ship.x or 0) - dock_x
                     local dy = (player_ship.y or 0) - dock_y
                     score = (dx * dx) + (dy * dy)
                     qualifies = true
-                elseif is_boat_in_port_dock_lane(player_ship, dock_x, dock_y, dock_rect_w) then
-                    local dx = math.abs((player_ship.x or 0) - dock_x)
-                    local dy = math.max(0, (player_ship.y or 0) - dock_y)
-                    score = (dx * dx) + (dy * dy)
+                elseif is_boat_in_port_dock_lane(player_ship, dock_geometry) then
+                    local forward_proj, side_proj = project_point_on_dock_axes(
+                        player_ship.x or 0,
+                        player_ship.y or 0,
+                        dock_geometry,
+                        dock_geometry.inner_x,
+                        dock_geometry.inner_y
+                    )
+                    local approach_dist = math.max(0, -forward_proj)
+                    score = (side_proj * side_proj) + (approach_dist * approach_dist)
                     qualifies = true
                 else
                     local dx = (player_ship.x or 0) - dock_x
@@ -393,6 +474,7 @@ function port.create(deps)
 
         local shop_data = port_a_shops[dock_index]
         local dock_x, dock_y = get_port_shop_dock_position(shop_data, dock_index)
+        local dock_geometry = get_port_shop_dock_geometry(shop_data, dock_index)
         local island_cx, island_cy = get_port_island_center(shop_data)
         local island = get_cached_port_shop_island(dock_index)
 
@@ -402,8 +484,9 @@ function port.create(deps)
         player_ship.target_rotation = player_ship.rotation
         player_ship.pending_shop_interaction = false
 
-        player_ship.on_foot_x = dock_x
-        player_ship.on_foot_y = dock_y - (PORT_DOCK_HEIGHT * 0.5) + DISEMBARK_OFFSET_Y
+        local disembark_dist = (PORT_DOCK_HEIGHT * 0.5) - DISEMBARK_OFFSET_Y
+        player_ship.on_foot_x = dock_x + (dock_geometry.forward_x * disembark_dist)
+        player_ship.on_foot_y = dock_y + (dock_geometry.forward_y * disembark_dist)
         player_ship.dock_walk_center_x = island_cx
         player_ship.dock_walk_center_y = island_cy
         player_ship.dock_walk_dock_x = dock_x
@@ -454,11 +537,22 @@ function port.create(deps)
             if is_shop_visible then
                 if not shop_data.is_spawned then
                     local spawn_offset = player_ship.velocity_x > 0 and 200 or -200
-                    shop_data.x = player_ship.x + spawn_offset
+                    local spawn_x = ray_x_at_y(
+                        player_ship.x + spawn_offset,
+                        player_ship.y,
+                        player_ship.rotation,
+                        shop_data.animation.target_y
+                    )
+                    if not spawn_x then
+                        spawn_x = player_ship.x + spawn_offset
+                    end
+                    shop_data.x = spawn_x
                     shop_data.is_spawned = true
                     shop_data.animation.is_animating = false
                     shop_data.animation.progress = 1
                     shop_data.y = shop_data.animation.target_y
+                    local island_center_y = shop_data.y + 24
+                    shop_data.dock_angle = math.atan2(player_ship.y - island_center_y, player_ship.x - shop_data.x)
                     print("Port-a-shop spawned at: X=" .. shop_data.x .. ", Y=" .. shop_data.y)
                 end
 
@@ -599,6 +693,42 @@ function port.create(deps)
         return true
     end
 
+    local function push_boat_out_of_oriented_rect(player_ship, geometry, extra_padding)
+        local boat_radius = tonumber(player_ship.radius) or 20
+        local padding = tonumber(extra_padding) or 0
+        local px = player_ship.x or 0
+        local py = player_ship.y or 0
+        local half_w = geometry.half_w + boat_radius + padding
+        local half_h = geometry.half_h + boat_radius + padding
+        local forward_proj, side_proj = project_point_on_dock_axes(px, py, geometry)
+
+        if math.abs(forward_proj) > half_h or math.abs(side_proj) > half_w then
+            return false
+        end
+
+        local forward_pos_pen = half_h - forward_proj
+        local forward_neg_pen = half_h + forward_proj
+        local side_pos_pen = half_w - side_proj
+        local side_neg_pen = half_w + side_proj
+        local min_pen = math.min(forward_pos_pen, forward_neg_pen, side_pos_pen, side_neg_pen)
+
+        if min_pen == forward_pos_pen then
+            forward_proj = half_h
+        elseif min_pen == forward_neg_pen then
+            forward_proj = -half_h
+        elseif min_pen == side_pos_pen then
+            side_proj = half_w
+        else
+            side_proj = -half_w
+        end
+
+        player_ship.x = geometry.center_x + (geometry.forward_x * forward_proj) + (geometry.side_x * side_proj)
+        player_ship.y = geometry.center_y + (geometry.forward_y * forward_proj) + (geometry.side_y * side_proj)
+        player_ship.velocity_x = (player_ship.velocity_x or 0) * 0.2
+        player_ship.velocity_y = (player_ship.velocity_y or 0) * 0.2
+        return true
+    end
+
     function api.resolve_boat_collisions(player_ship, shopkeeper)
         if not player_ship or player_ship.is_on_foot then
             return
@@ -606,15 +736,17 @@ function port.create(deps)
 
         for index, shop_data in ipairs(port_a_shops) do
             if shop_data.is_spawned then
-                local island = get_cached_port_shop_island(index)
-                local cx, cy = get_port_island_center(shop_data)
-                local dock_x, dock_y = get_port_shop_dock_position(shop_data, index)
-                local dock_rect_x, dock_rect_y, dock_rect_w, dock_rect_h = get_port_shop_dock_rect(cx, cy, island.radius or 44)
+                local dock_geometry = get_port_shop_dock_geometry(shop_data, index)
 
-                if not is_boat_in_port_dock_lane(player_ship, dock_x, dock_y, dock_rect_w) then
-                    push_boat_out_of_circle(player_ship, cx, cy, island.radius or 44)
+                if not is_boat_in_port_dock_lane(player_ship, dock_geometry) then
+                    push_boat_out_of_circle(
+                        player_ship,
+                        dock_geometry.island_center_x,
+                        dock_geometry.island_center_y,
+                        dock_geometry.island_radius
+                    )
                 end
-                push_boat_out_of_rect(player_ship, dock_rect_x, dock_rect_y, dock_rect_w, dock_rect_h, 0)
+                push_boat_out_of_oriented_rect(player_ship, dock_geometry, 0)
             end
         end
 
@@ -657,7 +789,8 @@ function port.create(deps)
                 local island_center_x, island_center_y = get_port_island_center(shop_data)
                 local island = get_cached_port_shop_island(index)
                 island:draw(island_center_x, island_center_y)
-                draw_port_shop_dock(island_center_x, island_center_y, island.radius or 45)
+                local dock_geometry = get_port_shop_dock_geometry(shop_data, index)
+                draw_port_shop_dock(dock_geometry)
 
                 if shop_data.is_active then
                     love.graphics.setColor(1, 1, 0)
