@@ -187,8 +187,6 @@ local function update_shore_objects()
 end
 
 -- port-a-shop configuration
-local SHOP_SPACING = FISHING_LEVEL  -- distance between shops
-local SHOP_LINE_NO_FISH_DISTANCE = constants.shops.no_fish_line_distance
 local ON_FOOT_SPEED = constants.shops.on_foot_speed or 125
 local ON_FOOT_MAX_WALK_UP = constants.shops.on_foot_max_walk_up or 240
 local ON_FOOT_MAX_WALK_SIDE = constants.shops.on_foot_max_walk_side or 260
@@ -206,15 +204,6 @@ local normalize_rainbows
 local reset_cheating_state
 local update_ship_animation
 local anti_cheat_enabled = true
-
-local function is_on_shop_line(y)
-    if math.abs(y - shore_division) <= SHOP_LINE_NO_FISH_DISTANCE then
-        return true
-    end
-
-    local nearest_shop_line = math.floor((y / SHOP_SPACING) + 0.5) * SHOP_SPACING
-    return math.abs(y - nearest_shop_line) <= SHOP_LINE_NO_FISH_DISTANCE
-end
 
 local shopkeeper = shopkeeper_factory.create({
     camera = camera,
@@ -785,7 +774,7 @@ state.fishing.runtime = fishing.create_runtime({
     gamestate = gamestate,
     get_current_water_color = getCurrentWaterColor,
     get_max_catch_texts = get_max_catch_texts,
-    is_on_shop_line = is_on_shop_line,
+    is_on_shop_line = shop.has_shop_collision_at_y,
     mobile_controls = mobile_controls,
     player_ship = player_ship,
     special_fish_event = special_fish_event,

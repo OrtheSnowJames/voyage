@@ -6,6 +6,63 @@ local constants = {
         fishing_cooldown = 5,
         catch_text_spacing = 20
     },
+    action_display = {
+        keycap = {
+            default_padding = 12,
+            corner_radius = 10,
+            depth_offset = 3,
+            font_size = 30,
+            face_color = {0.95, 0.92, 0.84, 1.0},
+            shadow_color = {0.32, 0.28, 0.20, 1.0},
+            border_color = {0.74, 0.66, 0.50, 1.0},
+            text_color = {0.14, 0.12, 0.08, 1.0},
+            highlight_color = {1.0, 1.0, 1.0, 0.32}
+        },
+        prompt = {
+            font_path = "NotoSans-VariableFont_wdth,wght.ttf",
+            font_size = 28,
+            margin = 18,
+            width = 560,
+            height = 112,
+            corner_radius = 24,
+            border_line_width = 3,
+            normal_color = {0.11, 0.16, 0.24, 1.0},
+            hover_color = {0.14, 0.20, 0.30, 1.0},
+            pressed_color = {0.09, 0.13, 0.19, 1.0},
+            border_color = {0.98, 0.89, 0.56, 1.0},
+            frame_color = {0.25, 0.33, 0.45, 1.0},
+            inner_border_color = {1.0, 1.0, 1.0, 0.16},
+            shadow_color = {0.01, 0.03, 0.07, 0.60},
+            text_color = {0.98, 0.99, 1.0, 1.0},
+            text_shadow_color = {0.0, 0.0, 0.0, 0.50},
+            press_offset = 2,
+            bottom_margin = 28
+        },
+        mouse_decal = {
+            border_line_width = 2,
+            shadow_offset_y = 3,
+            fishing_size = 56,
+            fishing_right_margin = 28,
+            fishing_y_ratio = 0.5,
+            wheel_padding_ratio = 0.06,
+            loop_color = {0.549, 0.792, 0.859, 0.92},
+            loop_line_width = 3,
+            loop_radius_scale = 1.12,
+            loop_arrow_size_ratio = 0.20,
+            loop_angle_degrees = 0,
+            body_color = {0.08, 0.09, 0.11, 1.0},
+            button_color = {0.13, 0.14, 0.17, 1.0},
+            button_pressed_color = {0.05, 0.06, 0.08, 1.0},
+            wheel_color = {0.02, 0.02, 0.03, 1.0},
+            wheel_slot_color = {0.16, 0.17, 0.21, 1.0},
+            wheel_slot_shadow_color = {0.02, 0.02, 0.03, 0.70},
+            wheel_slot_border_color = {0.34, 0.36, 0.43, 1.0},
+            split_color = {0.32, 0.34, 0.40, 1.0},
+            border_color = {0.70, 0.72, 0.79, 1.0},
+            highlight_color = {1.0, 1.0, 1.0, 0.12},
+            shadow_color = {0.0, 0.0, 0.0, 0.45}
+        }
+    },
     special_fish_event = {
         duration = 5.0
     },

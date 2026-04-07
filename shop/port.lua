@@ -21,13 +21,14 @@ function port.create(deps)
     local BOARD_INTERACTION_RANGE = constants.shops.board_interaction_range or 90
     local DOCK_TIP_OFFSET_Y = constants.shops.dock_tip_offset_y or 74
     local DISEMBARK_OFFSET_Y = constants.shops.disembark_offset_y or -18
+    local SHOP_LINE_NO_FISH_DISTANCE = constants.shops.no_fish_line_distance or 50
     local SHORE_DIVISION = constants.world.shore_division or 60
     local SHOP_SPACING = constants.fishing_level
     local INTERACTION_RANGE = 70
     local PORT_DOCK_WIDTH = 30
     local PORT_DOCK_HEIGHT = 30
     local PORT_DOCK_TOP_OVERLAP = 8
-    local PORT_SHOPKEEPER_VERTICAL_FACTOR = 0.58
+    local PORT_SHOPKEEPER_EDGE_MARGIN = 8
     local animation_frame_time = 0.5
     local sprite_frame_width = 16
     local sprite_frame_height = 16
@@ -251,7 +252,31 @@ function port.create(deps)
     local function get_port_shopkeeper_position(shop_data, index)
         local island = get_cached_port_shop_island(index)
         local cx, cy = get_port_island_center(shop_data)
-        return cx, cy + (island.radius * PORT_SHOPKEEPER_VERTICAL_FACTOR)
+        local keeper_offset = math.max(0, (island.radius or 44) - PORT_SHOPKEEPER_EDGE_MARGIN)
+        local dock_x, dock_y = get_port_shop_dock_position(shop_data, index)
+        local candidates = {
+            {x = cx - keeper_offset, y = cy},
+            {x = cx + keeper_offset, y = cy},
+            {x = cx, y = cy - keeper_offset},
+            {x = cx, y = cy + keeper_offset}
+        }
+
+        local best_x = candidates[1].x
+        local best_y = candidates[1].y
+        local best_dist_sq = -1
+
+        for _, candidate in ipairs(candidates) do
+            local dx = candidate.x - dock_x
+            local dy = candidate.y - dock_y
+            local dist_sq = (dx * dx) + (dy * dy)
+            if dist_sq > best_dist_sq then
+                best_dist_sq = dist_sq
+                best_x = candidate.x
+                best_y = candidate.y
+            end
+        end
+
+        return best_x, best_y
     end
 
     local function get_actor_position(player_ship)
@@ -870,6 +895,27 @@ function port.create(deps)
         end
 
         return last_shop_y
+    end
+
+    function api.has_shop_collision_at_y(y)
+        local y_num = tonumber(y)
+        if not y_num then
+            return false
+        end
+
+        if math.abs(y_num - SHORE_DIVISION) <= SHOP_LINE_NO_FISH_DISTANCE then
+            return true
+        end
+
+        for _, shop_data in ipairs(port_a_shops) do
+            ensure_animation(shop_data)
+            local shop_y = (shop_data.animation and shop_data.animation.target_y) or shop_data.y or 0
+            if math.abs(y_num - shop_y) <= SHOP_LINE_NO_FISH_DISTANCE then
+                return true
+            end
+        end
+
+        return false
     end
 
     return api

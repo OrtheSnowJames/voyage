@@ -299,6 +299,7 @@ function spawnenemy.update(dt, camera, player_x, player_y)
         else
             enemy.heading = turn_towards(enemy.heading or default_heading, desired_heading, (enemy.turn_rate or 1.5) * dt)
         end
+
         enemy.direction = math.cos(enemy.heading) >= 0 and 1 or -1
         enemy.x = enemy.x + math.cos(enemy.heading) * enemy.speed * dt
         enemy.y = enemy.y + math.sin(enemy.heading) * enemy.speed * dt

@@ -1,6 +1,7 @@
 local draw_steps = {}
 local hunger = require("game.hunger")
 local crew_management = require("game.crew_management")
+local action_display = require("game.action_display")
 
 local PLAYER_SHEET_PATH = "assets/Pirates Red Sprite Sheet.png"
 local PLAYER_FRAME_W = 16
@@ -569,6 +570,12 @@ function draw_steps.draw_time_and_debug(state)
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
     local game_config = state.fishing.config
+    local canvas_size = state.system.size
+    local action_prompt_width = state.constants.action_display.prompt.width
+    local action_prompt_height = state.constants.action_display.prompt.height
+    local action_prompt_bottom_margin = state.constants.action_display.prompt.bottom_margin or 24
+    local action_prompt_center_x = canvas_size.CANVAS_WIDTH / 2
+    local action_prompt_center_y = canvas_size.CANVAS_HEIGHT - action_prompt_bottom_margin - (action_prompt_height / 2)
 
     love.graphics.setColor(1, 1, 1, 1)
     local time_of_day = (player_ship.time_system.time / player_ship.time_system.DAY_LENGTH) * 12
@@ -583,22 +590,55 @@ function draw_steps.draw_time_and_debug(state)
     love.graphics.print(string.format("Fishing Level: %d", player_ship.y / fishing_level), 10, 30)
     hunger.draw_hud(state)
     state.ui.alert.draw(state.system.size)
+    mobile_controls.hide_fish_button = false
 
     if gamestate.get() == GameType.VOYAGE then
         local shop_module = state.shop.module
+        local prompt_clicked = false
+        local prompt_visible = false
         local can_disembark_main = shop_module.can_disembark_main_dock and shop_module.can_disembark_main_dock(player_ship, state.shop.keeper)
         local can_disembark_port = shop_module.can_disembark_port_shop and shop_module.can_disembark_port_shop(player_ship)
         if not player_ship.is_on_foot and (can_disembark_main or can_disembark_port) then
-            love.graphics.print("Press F to dock and get out", 10, 110)
+            prompt_visible = true
+            prompt_clicked = action_display.drawKeyPrompt("F", "Dock and get out", action_prompt_center_x, action_prompt_center_y)
         elseif player_ship.is_on_foot then
             local can_talk_main = shop_module.can_talk_to_main_shopkeeper and shop_module.can_talk_to_main_shopkeeper(player_ship, state.shop.keeper)
             local can_talk_port = shop_module.can_talk_to_port_shopkeeper and shop_module.can_talk_to_port_shopkeeper(player_ship)
             if can_talk_main or can_talk_port then
-                love.graphics.print("Press F to trade with shopkeeper", 10, 110)
+                prompt_visible = true
+                prompt_clicked = action_display.drawKeyPrompt("F", "Trade with shopkeeper", action_prompt_center_x, action_prompt_center_y)
             elseif shop_module.can_board_main_dock and shop_module.can_board_main_dock(player_ship) then
-                love.graphics.print("Press F to board your boat", 10, 110)
+                prompt_visible = true
+                prompt_clicked = action_display.drawKeyPrompt("F", "Board your boat", action_prompt_center_x, action_prompt_center_y)
             end
         end
+
+        mobile_controls.hide_fish_button = mobile_controls.enabled and prompt_visible
+        if mobile_controls.hide_fish_button and mobile_controls.buttons and mobile_controls.buttons.fish then
+            mobile_controls.buttons.fish.pressed = false
+        end
+
+        if prompt_clicked and state.system and state.system.game and state.system.game.keypressed then
+            state.system.game.keypressed("f")
+        end
+    elseif gamestate.get() == GameType.FISHING then
+        local mouse_decal = state.constants.action_display.mouse_decal or {}
+        local decal_size = mouse_decal.fishing_size or 56
+        local right_margin = mouse_decal.fishing_right_margin or 28
+        local y_ratio = mouse_decal.fishing_y_ratio or 0.5
+        local decal_center_x = canvas_size.CANVAS_WIDTH - right_margin - (decal_size / 2)
+        local decal_center_y = canvas_size.CANVAS_HEIGHT * y_ratio
+
+        action_display.drawMouseDecal(
+            decal_center_x,
+            decal_center_y,
+            decal_size,
+            {
+                left_down = love.mouse.isDown(1),
+                show_loop = true,
+                alpha = 0.95
+            }
+        )
     end
 
     if debugOptions.showDebugButtons and not player_ship.time_system.is_sleeping then

@@ -96,6 +96,7 @@ function state.create(sprite)
         },
         mobile_controls = {
             enabled = constants.mobile_controls.enabled_default,
+            hide_fish_button = false,
             button_size = constants.mobile_controls.button_size,
             button_spacing = constants.mobile_controls.button_spacing,
             button_alpha = constants.mobile_controls.button_alpha,
