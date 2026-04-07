@@ -91,7 +91,7 @@ local function count_feedable_fish(caught_fish, fishing_module)
 end
 
 local function get_current_catch_value_range(fishing_module, player_ship)
-    local available_fish = fishing_module.get_fish_avalible(
+    local available_fish = fishing_module.get_fish_available(
         player_ship.x,
         player_ship.y,
         player_ship.time_system.time

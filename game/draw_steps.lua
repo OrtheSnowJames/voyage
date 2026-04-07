@@ -607,13 +607,7 @@ function draw_steps.draw_time_and_debug(state)
 
         if suit.Button("Add 100 Fish", suit.layout:row(100, 30)).hit then
             for _ = 1, 100 do
-                local fish_available = fishing.get_fish_avalible(player_ship.x, player_ship.y, player_ship.time_system.time)
-                local fish_caught = fishing.fish(
-                    fishing.get_rod_rarity(player_ship.rod),
-                    fishing.get_rod_top_rarity(),
-                    fish_available,
-                    player_ship.y
-                )
+                local fish_caught = fishing.roll_from_context(fishing.build_roll_context(player_ship))
                 table.insert(player_ship.caught_fish, fish_caught)
             end
             print("Added 100 fish!")

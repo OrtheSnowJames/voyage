@@ -200,11 +200,8 @@ function update_steps.fishing_minigame_state(dt, state)
 
     gamestate.set(GameType.VOYAGE)
     if result.success then
-        if state.fishing.module.is_special_fish(result.fish_name) then
-            state.actions.trigger_special_fish_event(result.fish_name)
-        else
-            state.fishing.runtime.add_catch_text("You: " .. result.fish_name)
-            table.insert(state.player.caught_fish, result.fish_name)
+        local stored_in_inventory = state.fishing.runtime.record_catch("You", result.fish_name)
+        if stored_in_inventory then
             print('You caught: ' .. result.fish_name .. ' in ' .. string.format('%.1f', result.total_time) .. 's')
         end
 
