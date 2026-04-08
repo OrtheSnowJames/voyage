@@ -80,7 +80,8 @@ local constants = {
         defeat_text_display_time = 2.0,
         careless_crew_advantage_multiplier = 3,
         fainted_recovery_penalty_per_enemy = 0.005,
-        recovery_bay_max = 15
+        recovery_bay_max = 15,
+        dangerous_area_buffer = 10
     },
     ship = {
         start_x = 100,
@@ -92,7 +93,8 @@ local constants = {
         deceleration = 30,
         turn_speed = 2,
         turn_penalty = 0.7,
-        reverse_multiplier = 0.5
+        reverse_multiplier = 0.5,
+        drowning_time = 25 -- seconds
     },
     time = {
         day_length = 12 * 60,

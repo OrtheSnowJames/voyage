@@ -83,8 +83,8 @@ function crew_management.handle_buttons(state)
         return
     end
 
-    local suit = state.ui.suit
-    local layout = get_layout(state.system.size, state.ui.mobile)
+    local suit = state.system.ui.suit
+    local layout = get_layout(state.system.size, state.system.ui.mobile)
 
     local toggle_label = panel_open and "Close Crew" or "Crew"
     if suit.Button(toggle_label, {id = "crew_panel_toggle"}, layout.toggle.x, layout.toggle.y, layout.toggle.width, layout.toggle.height).hit then
@@ -110,19 +110,19 @@ function crew_management.handle_buttons(state)
         id = "feed_all_crew_centered"
     })
 
-    local sell_price = shop.get_crew_hire_cost(math.max(1, state.player.loyal_men - 1))
+    local sell_price = shop.get_crew_hire_cost(math.max(1, state.system.player.loyal_men - 1))
     local sell_label
-    if state.player.men > 1 then
+    if state.system.player.men > 1 then
         sell_label = string.format("Sell (+%d)", sell_price)
     else
         sell_label = "Need 2+ Crew"
     end
 
     if suit.Button(sell_label, {id = "crew_right_placeholder"}, layout.right_slot.x, layout.right_slot.y, layout.right_slot.width, layout.right_slot.height).hit then
-        if state.player.men > 1 and state.player.loyal_men > 1 then -- loyal men are bought from shop and can be sold
+        if state.system.player.men > 1 and state.system.player.loyal_men > 1 then -- loyal men are bought from shop and can be sold
             shop.add_coins(sell_price)
-            state.player.men = state.player.men - 1
-            state.player.loyal_men = state.player.loyal_men - 1
+            state.system.player.men = state.system.player.men - 1
+            state.system.player.loyal_men = state.system.player.loyal_men - 1
             alert.show("Sold successfully", 1.6, {1, 1, 1, 1})
         else
             alert.show("Not enough crew", 1.6, {1, 0.3, 0.3, 1})
@@ -144,7 +144,7 @@ function crew_management.draw_overlay(state)
     love.graphics.setColor(0, 0, 0, 0.82)
     love.graphics.rectangle("fill", 0, 0, state.system.size.CANVAS_WIDTH, state.system.size.CANVAS_HEIGHT)
 
-    local layout = get_layout(state.system.size, state.ui.mobile)
+    local layout = get_layout(state.system.size, state.system.ui.mobile)
     local font = love.graphics.getFont()
 
     love.graphics.setColor(1, 1, 1, 1)

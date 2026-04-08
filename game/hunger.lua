@@ -204,7 +204,7 @@ end
 local function get_decay_per_second(state, hunger_config)
     local days_to_die = tonumber(hunger_config.days_without_food_to_die)
     if days_to_die and days_to_die > 0 then
-        local day_length = tonumber(state.player.time_system.DAY_LENGTH) or tonumber(state.constants.time.day_length) or 1
+        local day_length = tonumber(state.system.player.time_system.DAY_LENGTH) or tonumber(state.constants.time.day_length) or 1
         if day_length > 0 then
             return hunger_config.max / (day_length * days_to_die)
         end
@@ -262,9 +262,9 @@ function hunger.handle_feed_button(state, options)
     end
 
     options = options or {}
-    local suit = state.ui.suit
+    local suit = state.system.ui.suit
     local size = state.system.size
-    local player_ship = state.player
+    local player_ship = state.system.player
     local hunger_config = state.constants.hunger
 
     local button_x = options.x or 10
@@ -303,9 +303,9 @@ function hunger.handle_feed_all_button(state, options)
     end
 
     options = options or {}
-    local suit = state.ui.suit
+    local suit = state.system.ui.suit
     local size = state.system.size
-    local player_ship = state.player
+    local player_ship = state.system.player
     local hunger_config = state.constants.hunger
 
     local button_x = options.x or 10
@@ -350,7 +350,7 @@ end
 function hunger.update(dt, state)
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
-    local player_ship = state.player
+    local player_ship = state.system.player
     local hunger_config = state.constants.hunger
 
     sync_hunger_levels(player_ship, hunger_config)
@@ -387,7 +387,7 @@ function hunger.update(dt, state)
 
     if player_ship.men <= 0 then
         print("Your crew starved to death.")
-        state.actions.reset_game()
+        state.system.actions.reset_game()
         gamestate.set(GameType.MENU)
         return GameType.MENU
     end
@@ -396,13 +396,13 @@ function hunger.update(dt, state)
 end
 
 function hunger.draw_hud(state)
-    local player_ship = state.player
+    local player_ship = state.system.player
     local hunger_config = state.constants.hunger
     sync_hunger_levels(player_ship, hunger_config)
 
     local mods_count = 0
-    if state.mods then
-        mods_count = tonumber(state.mods.count) or 0
+    if state.system.mods then
+        mods_count = tonumber(state.system.mods.count) or 0
     end
 
     love.graphics.setColor(1, 1, 1, 1)

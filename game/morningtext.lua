@@ -185,16 +185,60 @@ local function get_revealed_lines()
     local line2_full = state.lines[2] or ""
     local total_visible_chars = math.floor(state.reveal_chars)
 
-    local line1_visible = math.min(#line1_full, total_visible_chars)
-    local line2_visible = math.max(0, total_visible_chars - #line1_full)
+    local function utf8_len_safe(s)
+        if utf8 and utf8.len then
+            local ok, n = pcall(utf8.len, s)
+            if ok and n then
+                return n
+            end
+        end
+        return #s
+    end
 
-    local line1 = string.sub(line1_full, 1, line1_visible)
-    local line2 = string.sub(line2_full, 1, line2_visible)
+    local function utf8_sub_chars(s, count)
+        if count <= 0 then
+            return ""
+        end
+        if not (utf8 and utf8.offset) then
+            return string.sub(s, 1, count)
+        end
+        local ok, next_char_byte = pcall(utf8.offset, s, count + 1)
+        if not ok then
+            return string.sub(s, 1, count)
+        end
+        if next_char_byte then
+            return string.sub(s, 1, next_char_byte - 1)
+        end
+        return s
+    end
+
+    local line1_len = utf8_len_safe(line1_full)
+    local line2_len = utf8_len_safe(line2_full)
+    local line1_visible = math.min(line1_len, total_visible_chars)
+    local line2_visible = math.min(line2_len, math.max(0, total_visible_chars - line1_len))
+
+    local line1 = utf8_sub_chars(line1_full, line1_visible)
+    local line2 = utf8_sub_chars(line2_full, line2_visible)
     return line1, line2
 end
 
+local function sanitize_utf8_line(s)
+    local text = tostring(s or "")
+    if utf8 and utf8.len then
+        local ok, n = pcall(utf8.len, text)
+        if ok and n then
+            return text
+        end
+    end
+    -- Fallback: strip non-ASCII bytes if malformed UTF-8 sneaks in.
+    return text:gsub("[\128-\255]", "")
+end
+
 local function start_lines(lines)
-    state.lines = lines
+    state.lines = {
+        sanitize_utf8_line(lines and lines[1] or ""),
+        sanitize_utf8_line(lines and lines[2] or "")
+    }
     state.active = true
     state.timer = 0
     state.reveal_chars = 0

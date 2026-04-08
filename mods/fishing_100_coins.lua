@@ -2,9 +2,13 @@ local BONUS_COINS = 100
 
 return {
     on_load = function(state, api)
-        local runtime = state and state.fishing and state.fishing.runtime
-        local shop = state and state.shop and state.shop.module
-        local alert = state and state.ui and state.ui.alert
+        local system = state and state.system or nil
+        local fishing_state = (system and system.fishing_state) or (state and state.fishing) or nil
+        local shop_state = (system and system.shop_state) or (state and state.shop) or nil
+        local ui_state = (system and system.ui) or (state and state.ui) or nil
+        local runtime = fishing_state and fishing_state.runtime
+        local shop = shop_state and shop_state.module
+        local alert = ui_state and ui_state.alert
 
         if type(runtime) ~= "table" or type(runtime.record_catch) ~= "function" then
             if api and api.log then

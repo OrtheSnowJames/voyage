@@ -6,7 +6,8 @@ local GameType = {
     SHOP_VIEW_INVENTORY = "shop.view_inventory",
     FISHING = "fishing",
     COMBAT = "combat",
-    SLEEPING = "sleeping"
+    SLEEPING = "sleeping",
+    SHIPWRECKED = "shipwrecked"
 }
 
 return GameType

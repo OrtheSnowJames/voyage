@@ -24,6 +24,7 @@ function shaders.create()
     extern number shoreY;
     extern vec2 camera;
     extern vec2 resolution;
+    extern number waveIntensity;
 
     extern int ripple_count;
     extern float ripple_sources_x[10];
@@ -65,8 +66,10 @@ function shaders.create()
 
         vec3 final_color = waterColor;
 
-        float wave1 = noise(uv * vec2(8.0, 4.0) + vec2(time * 0.1, time * 0.05));
-        float wave2 = noise(uv * vec2(20.0, 10.0) + vec2(time * -0.05, time * 0.15));
+        float intensity = max(0.0, waveIntensity);
+        float speed_scale = mix(0.65, 2.2, clamp(intensity / 3.0, 0.0, 1.0));
+        float wave1 = noise(uv * vec2(8.0, 4.0) + vec2(time * 0.1 * speed_scale, time * 0.05 * speed_scale));
+        float wave2 = noise(uv * vec2(20.0, 10.0) + vec2(time * -0.05 * speed_scale, time * 0.15 * speed_scale));
         float wave_total = wave1 * 0.7 + wave2 * 0.3;
 
         float total_ripple_displacement = 0.0;
@@ -96,14 +99,14 @@ function shaders.create()
             }
         }
 
-        float wave_total_with_ripples = wave_total + total_ripple_displacement * 0.35;
-        float wave_tint = wave_total_with_ripples * 0.05;
+        float wave_total_with_ripples = (wave_total * mix(0.35, 1.9, clamp(intensity / 3.0, 0.0, 1.0))) + total_ripple_displacement * 0.35;
+        float wave_tint = wave_total_with_ripples * mix(0.02, 0.11, clamp(intensity / 3.0, 0.0, 1.0));
 
         final_color.r += wave_tint;
         final_color.g += wave_tint;
         final_color.b += wave_tint;
 
-        float specular = pow(noise(uv * vec2(10.0, 5.0) - vec2(time * 0.12, time * 0.08)), 18.0);
+        float specular = pow(noise(uv * vec2(10.0, 5.0) - vec2(time * 0.12 * speed_scale, time * 0.08 * speed_scale)), 18.0);
         specular *= smoothstep(0.4, 0.7, wave_total_with_ripples);
 
         final_color.r += specular * 0.6;

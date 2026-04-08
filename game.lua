@@ -46,19 +46,72 @@ local special_fish_event = state.core.special_fish_event
 local debugOptions = state.core.debug_options
 local mobile_controls = state.core.mobile_controls
 local gameState = state.core.game_state
+local water_state = state.core.water
 local camera = state.core.camera
 local player_ship = state.core.player_ship
 local ripples = state.core.ripples
 
 state.player = player_ship
+state.drowning = constants.ship.drowning_time
+state.shipwreck_reached_land = false
+state.shipwreck_landfall_pending_recovery = false
 state.camera = camera
+state.water = water_state
 state.system = {
     game = game,
     gamestate = gamestate,
     gametype = GameType,
     serialize = serialize,
     menu = menu,
-    size = size
+    size = size,
+    spawnenemy = spawnenemy,
+    constants = constants,
+    require = require,
+    -- direct module access for mods
+    fishing = fishing,
+    combat = combat,
+    shop = shop,
+    enemy = spawnenemy,
+    visuals = visuals,
+    morningtext = morningtext,
+    update_steps = update_steps,
+    draw_steps = draw_steps,
+    movement_steps = movement_steps,
+    mobile_controls_steps = mobile_controls_steps,
+    ripple_steps = ripple_steps,
+    shaders = shader_factory,
+    shopkeeper = shopkeeper_factory,
+    hunger = hunger,
+    crew_management = crew_management,
+    alert = alert,
+    mods = mods,
+    -- grouped alias kept for backward compatibility
+    modules = {
+        fishing = fishing,
+        combat = combat,
+        shop = shop,
+        enemy = spawnenemy,
+        visuals = visuals,
+        morningtext = morningtext,
+        update_steps = update_steps,
+        draw_steps = draw_steps,
+        movement_steps = movement_steps,
+        mobile_controls_steps = mobile_controls_steps,
+        ripple_steps = ripple_steps,
+        shaders = shader_factory,
+        shopkeeper = shopkeeper_factory,
+        hunger = hunger,
+        crew_management = crew_management,
+        alert = alert,
+        mods = mods
+    },
+    libs = {
+        math = math,
+        string = string,
+        table = table,
+        utf8 = utf8,
+        love = love
+    }
 }
 state.fishing = {
     module = fishing,
@@ -92,6 +145,22 @@ state.mods = {
     active = false,
     count = 0
 }
+
+-- mirror runtime state on state.system so most code/mods can access one surface
+state.system.player = state.player
+state.system.camera = state.camera
+state.system.water = state.water
+state.system.world = state.world
+state.system.shore = state.shore
+state.system.ui = state.ui
+state.system.actions = state.actions
+state.system.fishing_state = state.fishing
+state.system.combat_state = state.combat
+state.system.enemy_state = state.enemy
+state.system.shop_state = state.shop
+state.system.mods_state = state.mods
+state.system.mods_module = mods
+state.system.mods = state.mods
 
 -- derived settings (automatically update when config changes)
 local function get_max_catch_texts()
@@ -128,6 +197,7 @@ state.shore = {
     water_shader = water_shader,
     objects = state.world.shore_objects
 }
+state.system.shore = state.shore
 
 -- shore objects system
 local shore_objects = state.world.shore_objects
@@ -233,6 +303,10 @@ local function reset_game()
     spawnenemy.clear_enemies()
     
     -- reset player ship to initial state
+    state.drowning = constants.ship.drowning_time
+    state.shipwreck_reached_land = false
+    state.shipwreck_landfall_pending_recovery = false
+    state.shipwreck_game_over = nil
     player_ship.x = constants.ship.start_x
     player_ship.y = constants.ship.start_y
     player_ship.men = constants.ship.start_crew
@@ -242,8 +316,14 @@ local function reset_game()
     player_ship.rotation = 0
     player_ship.target_rotation = 0
     player_ship.is_on_foot = false
+    player_ship.is_swimming = false
     player_ship.on_foot_x = player_ship.x
     player_ship.on_foot_y = player_ship.y
+    player_ship.shipwreck_landed = false
+    player_ship.shipwreck_sleep_timer = 0
+    player_ship.shipwreck_land_dock_x = nil
+    player_ship.shipwreck_land_dock_y = nil
+    player_ship.boat_hidden_until_morning = false
     player_ship.pending_shop_interaction = false
     player_ship.dock_walk_center_x = nil
     player_ship.dock_walk_center_y = nil
@@ -311,6 +391,57 @@ local function reset_game()
     morningtext.reset()
 end
 
+local function reset_after_shipwreck_landfall()
+    local kept_inventory = {}
+    for i, item in ipairs(player_ship.inventory or {}) do
+        kept_inventory[i] = item
+    end
+    local kept_shop_data = shop.get_port_a_shops_data and shop.get_port_a_shops_data() or nil
+    local kept_coins = tonumber(shop.get_coins and shop.get_coins()) or 0
+    local kept_x = tonumber(player_ship.shipwreck_land_dock_x) or tonumber(player_ship.x) or constants.ship.start_x
+    local kept_y = tonumber(player_ship.shipwreck_land_dock_y) or tonumber(player_ship.y) or constants.ship.start_y
+    local kept_rotation = tonumber(player_ship.rotation) or 0
+
+    reset_game()
+
+    player_ship.inventory = kept_inventory
+    player_ship.caught_fish = {}
+    player_ship.men = 1
+    player_ship.loyal_men = 0
+    player_ship.fainted_men = 0
+    player_ship.hunger_levels = {}
+    player_ship.hunger_alert_text = ""
+    player_ship.hunger_alert_timer = 0
+    player_ship.x = kept_x
+    player_ship.y = kept_y
+    player_ship.rotation = kept_rotation
+    player_ship.target_rotation = kept_rotation
+    player_ship.is_on_foot = false
+    player_ship.is_swimming = false
+    player_ship.boat_hidden_until_morning = false
+    player_ship.on_foot_x = kept_x
+    player_ship.on_foot_y = kept_y
+
+    if shop.set_port_a_shops_data then
+        if kept_shop_data then
+            shop.set_port_a_shops_data(kept_shop_data)
+        else
+            shop.set_port_a_shops_data({coins = kept_coins})
+        end
+        if shop.add_coins and shop.get_coins then
+            local current_coins = tonumber(shop.get_coins()) or 0
+            local delta = kept_coins - current_coins
+            if delta > 0 then
+                shop.add_coins(delta)
+            elseif delta < 0 and shop.try_spend_coins then
+                shop.try_spend_coins(-delta)
+            end
+        end
+    end
+
+    serialize.save_data(game.get_saveable_data())
+end
+
 function ripples:spawn(player_ship, x, y)
     ripple_steps.spawn(self, player_ship, camera, size, x, y)
 end
@@ -336,6 +467,8 @@ function player_ship:update(dt)
 
     movement_steps.update_player_ship(self, dt, {
         mobile_controls = mobile_controls,
+        gamestate = gamestate.get(),
+        GameType = GameType,
         normalize_rainbows = game.normalize_rainbows,
         shore_division = shore_division,
         on_foot_speed = ON_FOOT_SPEED,
@@ -669,6 +802,12 @@ function game.load()
     else
         player_ship.is_on_foot = player_ship.is_on_foot == true
     end
+    player_ship.is_swimming = player_ship.is_swimming == true
+    player_ship.shipwreck_landed = player_ship.shipwreck_landed == true
+    player_ship.shipwreck_sleep_timer = tonumber(player_ship.shipwreck_sleep_timer) or 0
+    player_ship.shipwreck_land_dock_x = tonumber(player_ship.shipwreck_land_dock_x)
+    player_ship.shipwreck_land_dock_y = tonumber(player_ship.shipwreck_land_dock_y)
+    player_ship.boat_hidden_until_morning = player_ship.boat_hidden_until_morning == true
     player_ship.on_foot_x = tonumber(player_ship.on_foot_x) or player_ship.x
     player_ship.on_foot_y = tonumber(player_ship.on_foot_y) or player_ship.y
     player_ship.pending_shop_interaction = player_ship.pending_shop_interaction == true
@@ -794,6 +933,27 @@ end
 
 -- function to handle sleep state
 local function during_sleep()
+    if state.shipwreck_landfall_pending_recovery then
+        reset_after_shipwreck_landfall()
+        state.shipwreck_landfall_pending_recovery = false
+    end
+
+    if player_ship.boat_hidden_until_morning then
+        local dock_x = tonumber(player_ship.shipwreck_land_dock_x)
+        local dock_y = tonumber(player_ship.shipwreck_land_dock_y)
+        if not dock_x or not dock_y then
+            local main_dock_x, main_dock_y = shop.get_main_dock_position and shop.get_main_dock_position(shopkeeper)
+            dock_x = dock_x or main_dock_x
+            dock_y = dock_y or main_dock_y
+        end
+        dock_x = dock_x or player_ship.x
+        dock_y = dock_y or player_ship.y
+        player_ship.x = dock_x
+        player_ship.y = dock_y
+        player_ship.time_system.time = 0
+        player_ship.boat_hidden_until_morning = false
+    end
+
     -- check if near any shop (port-a-shop or shopkeeper)
     local near_shop = false
     
@@ -859,6 +1019,7 @@ end
 state.actions.get_time_of_day_hours = get_time_of_day_hours
 state.actions.increase_rainbows_for_new_day = increase_rainbows_for_new_day
 state.actions.reset_game = reset_game
+state.actions.reset_after_shipwreck_landfall = reset_after_shipwreck_landfall
 state.actions.during_sleep = during_sleep
 state.actions.trigger_ship_animation = trigger_ship_animation
 state.actions.trigger_special_fish_event = trigger_special_fish_event

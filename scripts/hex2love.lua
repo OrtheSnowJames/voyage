@@ -1,4 +1,4 @@
-local function print_help()
+function print_help()
     print("hex2love — convert hex colors to LÖVE color values")
     print()
     print("Usage:")

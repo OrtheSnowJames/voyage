@@ -10,6 +10,7 @@ local ship_name = ""  -- store ship name globally
 
 local game_states = {
     [GameType.VOYAGE] = true,
+    [GameType.SHIPWRECKED] = true,
     [GameType.FISHING] = true,
     [GameType.COMBAT] = true,
     [GameType.SHOP] = true,

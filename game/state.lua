@@ -56,8 +56,14 @@ local function create_player_ship(sprite)
         sword = "Basic Sword",
         direction = 0,
         is_on_foot = false,
+        is_swimming = false,
         on_foot_x = constants.ship.start_x,
         on_foot_y = constants.ship.start_y,
+        shipwreck_landed = false,
+        shipwreck_sleep_timer = 0,
+        shipwreck_land_dock_x = nil,
+        shipwreck_land_dock_y = nil,
+        boat_hidden_until_morning = false,
         pending_shop_interaction = false,
         dock_walk_center_x = constants.ship.start_x,
         dock_walk_center_y = constants.ship.start_y,
@@ -119,6 +125,10 @@ function state.create(sprite)
                     text_display_time = constants.combat.defeat_text_display_time
                 }
             }
+        },
+        water = {
+            -- 0.0 = calm/peaceful, 1.0 = default, 3.0+ = very strong waves
+            wave_intensity = 1.0
         },
         camera = {
             x = 0,

@@ -1,6 +1,7 @@
 local update_steps = {}
 local constants = require("game.constants")
 local time_utils = require("game.time_utils")
+local storm = require("game.storm")
 local RECOVERY_BAY_MAX = constants.combat.recovery_bay_max or 15
 
 local function clear_catch_texts(state)
@@ -12,10 +13,10 @@ end
 
 local function update_enemy_ripples(state)
     local enemies = state.enemy.module.get_enemies()
-    local ship_ripples = state.world.ship_ripples
-    local ripple_spawn_distance = state.world.ripple_spawn_distance
-    local max_ripples = state.world.max_ripples
-    local player_ship = state.player
+    local ship_ripples = state.system.world.ship_ripples
+    local ripple_spawn_distance = state.system.world.ripple_spawn_distance
+    local max_ripples = state.system.world.max_ripples
+    local player_ship = state.system.player
 
     for _, enemy in ipairs(enemies) do
         local dist_since_last_ripple = math.abs(enemy.x - enemy.last_ripple_pos.x)
@@ -39,7 +40,7 @@ end
 local function handle_enemy_collision(state)
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
-    local player_ship = state.player
+    local player_ship = state.system.player
     local combat_state = state.combat.state.combat
     local fishing_runtime = state.fishing.runtime
     local fishing_minigame = state.fishing.minigame
@@ -71,18 +72,18 @@ end
 function update_steps.day_night_cycle(dt, state)
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
-    local player_ship = state.player
+    local player_ship = state.system.player
 
     if gamestate.get() ~= GameType.COMBAT then
         if not player_ship.time_system.is_sleeping then
             player_ship.time_system.time = player_ship.time_system.time + dt
 
-            if not player_ship.reached_first_1130 and state.actions.get_time_of_day_hours() >= state.constants.fish.gold_sturgeon_unlock_hour then
+            if not player_ship.reached_first_1130 and state.system.actions.get_time_of_day_hours() >= state.constants.fish.gold_sturgeon_unlock_hour then
                 player_ship.reached_first_1130 = true
             end
 
             if player_ship.time_system.time >= player_ship.time_system.DAY_LENGTH then
-                state.actions.increase_rainbows_for_new_day()
+                state.system.actions.increase_rainbows_for_new_day()
                 player_ship.time_system.time = 0
                 player_ship.time_system.is_fading = true
                 player_ship.time_system.fade_timer = 0
@@ -97,7 +98,7 @@ end
 function update_steps.sleep_fade_state(dt, state)
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
-    local player_ship = state.player
+    local player_ship = state.system.player
     local time_system = player_ship.time_system
 
     if gamestate.get() ~= GameType.COMBAT then
@@ -112,7 +113,8 @@ function update_steps.sleep_fade_state(dt, state)
                     time_system.sleep_timer = 0
                     time_system.fade_direction = "wait"
                     time_system.fade_timer = 0
-                    state.actions.during_sleep()
+                    storm.force_stop(state)
+                    state.system.actions.during_sleep()
                 end
             elseif time_system.fade_direction == "wait" then
                 time_system.sleep_timer = time_system.sleep_timer + dt
@@ -128,7 +130,7 @@ function update_steps.sleep_fade_state(dt, state)
                     time_system.is_sleeping = false
                     time_system.fade_alpha = 0
                     gamestate.set(GameType.VOYAGE)
-                    state.ui.morningtext.start(player_ship.rainbows)
+                    state.system.ui.morningtext.start(player_ship.rainbows)
 
                     player_ship.name = state.system.menu.get_name()
                     state.system.serialize.save_data(state.system.game.get_saveable_data())
@@ -139,9 +141,9 @@ function update_steps.sleep_fade_state(dt, state)
 end
 
 function update_steps.handle_back_to_menu_button(state)
-    local suit = state.ui.suit
+    local suit = state.system.ui.suit
     if suit.Button("Save & Return", {id = "menu"}, suit.layout:row(120, 30)).hit then
-        state.player.name = state.system.menu.get_name()
+        state.system.player.name = state.system.menu.get_name()
         local data = state.system.game.get_saveable_data()
         local time_system = data.time_system or {}
         local day_length = tonumber(time_system.DAY_LENGTH) or state.constants.time.day_length
@@ -167,33 +169,141 @@ function update_steps.shop_and_navigation(dt, state)
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
     local current_state = gamestate.get()
+    local player = state.system.player
 
-    if current_state == GameType.VOYAGE or current_state:find(GameType.SHOP, 1, true) then
-        state.shop.module.update(gamestate, state.player, state.shop.keeper, state.fishing.config)
-        if current_state == GameType.VOYAGE then
-            state.player:update(dt)
+    if current_state == GameType.SHIPWRECKED then
+        if not player.shipwreck_landed and not state.shipwreck_game_over then
+            state.drowning = math.max(0, (tonumber(state.drowning) or 0) - dt)
         end
-        state.actions.update_ship_animation(dt)
-        state.actions.update_shore_objects()
-        state.shop.keeper:update(state.player.x, state.player.y, dt)
+        if state.drowning <= 0 then
+            state.shipwreck_game_over = state.shipwreck_game_over or {
+                title_shown = false,
+                fade_started = false,
+                reset_done = false,
+                title_duration = 5,
+                title_timer = 5
+            }
+
+            player.is_swimming = false
+            player.is_on_foot = true
+            player.velocity_x = 0
+            player.velocity_y = 0
+            player.on_foot_x = player.x
+            player.on_foot_y = player.y
+
+            if not state.shipwreck_game_over.title_shown then
+                local msg_duration = tonumber(state.shipwreck_game_over.title_duration) or 5
+                state.system.alert.title("Wh... Where am I?", msg_duration, {1, 1, 1, 1}, 1.2, 1.2)
+                state.shipwreck_game_over.title_shown = true
+                state.shipwreck_game_over.title_timer = msg_duration
+                storm.set_audio_volume_multiplier(0.5)
+                if state.system.alert.set_title_alpha_multiplier then
+                    state.system.alert.set_title_alpha_multiplier(1)
+                end
+            elseif not state.shipwreck_game_over.fade_started then
+                state.shipwreck_game_over.title_timer = math.max(0, (tonumber(state.shipwreck_game_over.title_timer) or 0) - dt)
+                local title_duration = math.max(0.001, tonumber(state.shipwreck_game_over.title_duration) or 5)
+                storm.set_audio_volume_multiplier(0.5 * (state.shipwreck_game_over.title_timer / title_duration))
+            end
+
+            if state.shipwreck_game_over.title_shown
+                and not state.shipwreck_game_over.fade_started
+                and (tonumber(state.shipwreck_game_over.title_timer) or 0) <= 1.0 then
+                state.shipwreck_game_over.fade_started = true
+                player.time_system.is_fading = false
+                player.time_system.is_sleeping = false
+                player.time_system.fade_alpha = 0
+                storm.set_audio_volume_multiplier(0)
+            end
+
+            if state.shipwreck_game_over.fade_started and not state.shipwreck_game_over.reset_done then
+                local fade_duration = 1.0
+                player.time_system.fade_alpha = math.min(1, (tonumber(player.time_system.fade_alpha) or 0) + (dt / fade_duration))
+                if state.system.alert.set_title_alpha_multiplier then
+                    state.system.alert.set_title_alpha_multiplier(1 - player.time_system.fade_alpha)
+                end
+                if player.time_system.fade_alpha >= 1 then
+                    state.shipwreck_game_over.reset_done = true
+                    state.system.actions.reset_game()
+                    gamestate.set(GameType.MENU)
+                    return
+                end
+            end
+        end
+        if not player.shipwreck_landed and not state.shipwreck_game_over then
+            player.is_swimming = true
+            player.is_on_foot = true
+            player.pending_shop_interaction = false
+            player.on_foot_x = player.on_foot_x or player.x
+            player.on_foot_y = player.on_foot_y or player.y
+        end
+    else
+        storm.set_audio_volume_multiplier(1)
+        if state.system.alert.set_title_alpha_multiplier then
+            state.system.alert.set_title_alpha_multiplier(1)
+        end
+        player.is_swimming = false
+        player.shipwreck_landed = false
+        player.shipwreck_sleep_timer = 0
+    end
+
+    if current_state == GameType.VOYAGE or current_state == GameType.SHIPWRECKED or current_state:find(GameType.SHOP, 1, true) then
+        state.shop.module.update(gamestate, player, state.shop.keeper, state.fishing.config)
+        if (current_state == GameType.VOYAGE or current_state == GameType.SHIPWRECKED) and not state.shipwreck_game_over then
+            player:update(dt)
+        end
+        state.system.actions.update_ship_animation(dt)
+        state.system.actions.update_shore_objects()
+        state.shop.keeper:update(player.x, player.y, dt)
         if current_state == GameType.VOYAGE and state.shop.module.resolve_boat_collisions then
-            state.shop.module.resolve_boat_collisions(state.player, state.shop.keeper)
+            state.shop.module.resolve_boat_collisions(player, state.shop.keeper)
+        end
+
+        if current_state == GameType.SHIPWRECKED then
+            if (not player.shipwreck_landed) and state.shop.module.try_land_swimmer then
+                state.shop.module.try_land_swimmer(player)
+            end
+            if player.shipwreck_landed and not state.shipwreck_game_over then
+                if player.dock_walk_mode == "shore" and (not player.shipwreck_land_dock_x or not player.shipwreck_land_dock_y) then
+                    local main_dock_x, main_dock_y = state.shop.module.get_main_dock_position and state.shop.module.get_main_dock_position(state.shop.keeper)
+                    player.shipwreck_land_dock_x = main_dock_x
+                    player.shipwreck_land_dock_y = main_dock_y
+                end
+                state.shipwreck_reached_land = true
+                player.shipwreck_sleep_timer = (tonumber(player.shipwreck_sleep_timer) or 0) + dt
+                if player.shipwreck_sleep_timer >= 2 then
+                    local time_system = player.time_system
+                    if not time_system.is_fading and not time_system.is_sleeping then
+                        state.shipwreck_landfall_pending_recovery = true
+                        time_system.is_fading = true
+                        time_system.fade_timer = 0
+                        time_system.fade_direction = "out"
+                        time_system.fade_alpha = 0
+                        time_system.is_sleeping = false
+                        gamestate.set(GameType.SLEEPING)
+                    end
+                end
+            end
         end
     end
 end
 
 function update_steps.voyage_state(dt, state)
-    if state.system.gamestate.get() ~= state.system.gametype.VOYAGE then
+    local current_state = state.system.gamestate.get()
+    local GameType = state.system.gametype
+    if current_state ~= GameType.VOYAGE and current_state ~= GameType.SHIPWRECKED then
         return
     end
 
-    if state.player.is_on_foot then
+    storm.update(state, dt)
+
+    if state.system.player.is_on_foot then
         state.fishing.runtime.update_catch_texts(dt)
         return
     end
 
     state.fishing.runtime.update_catch_texts(dt)
-    state.enemy.module.update(dt, state.camera, state.player.x, state.player.y)
+    state.enemy.module.update(dt, state.system.camera, state.system.player.x, state.system.player.y)
     update_enemy_ripples(state)
     handle_enemy_collision(state)
     state.fishing.runtime.fish(dt)
@@ -218,7 +328,7 @@ function update_steps.fishing_minigame_state(dt, state)
             print('You caught: ' .. result.fish_name .. ' in ' .. string.format('%.1f', result.total_time) .. 's')
         end
 
-        state.actions.trigger_ship_animation()
+        state.system.actions.trigger_ship_animation()
         print('Final fish: ' .. result.fish_name .. ' (Quality score: ' .. result.quality_score .. ')')
     else
         state.fishing.runtime.add_catch_text("Fish escaped!")
@@ -232,9 +342,9 @@ end
 function update_steps.combat_state(dt, state)
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
-    local player_ship = state.player
+    local player_ship = state.system.player
     local combat_state = state.combat.state.combat
-    local camera = state.camera
+    local camera = state.system.camera
 
     if gamestate.get() ~= GameType.COMBAT then
         return nil
@@ -315,7 +425,7 @@ function update_steps.combat_state(dt, state)
                             print('A mysterious note has been left behind...')
                         end
 
-                        state.actions.reset_game()
+                        state.system.actions.reset_game()
                         gamestate.set(GameType.MENU)
                         return GameType.MENU
                     end
@@ -330,8 +440,8 @@ end
 function update_steps.camera_follow(state)
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
-    local player_ship = state.player
-    local camera = state.camera
+    local player_ship = state.system.player
+    local camera = state.system.camera
     local canvas = state.system.size
 
     if gamestate.get() == GameType.COMBAT then
@@ -368,7 +478,7 @@ function update_steps.special_fish_event(dt, state)
 
     if special_fish_event.timer >= special_fish_event.duration then
         special_fish_event.active = false
-        table.insert(state.player.caught_fish, special_fish_event.fish_name)
+        table.insert(state.system.player.caught_fish, special_fish_event.fish_name)
         print('Special fish caught: ' .. special_fish_event.fish_name)
     end
 end

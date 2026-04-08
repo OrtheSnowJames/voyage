@@ -16,6 +16,7 @@ local PORT_EXPORTS = {
     "can_talk_to_main_shopkeeper",
     "can_disembark_port_shop",
     "try_disembark_port_shop",
+    "try_land_swimmer",
     "can_talk_to_port_shopkeeper",
     "request_port_shop_interaction",
     "has_shop_collision_at_y",

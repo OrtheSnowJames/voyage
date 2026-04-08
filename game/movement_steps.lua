@@ -46,6 +46,56 @@ end
 function movement_steps.update_player_ship(self, dt, ctx)
     local mobile_controls = ctx.mobile_controls
 
+    if ctx.gamestate == ctx.GameType.SHIPWRECKED and self.shipwreck_landed then
+        self.velocity_x = 0
+        self.velocity_y = 0
+        self.is_swimming = false
+        self.is_on_foot = true
+        self.on_foot_x = self.on_foot_x or self.x
+        self.on_foot_y = self.on_foot_y or self.y
+        ctx.update_ship_animation(dt)
+        return
+    end
+
+    if self.is_swimming then
+        local move_x = 0
+        local move_y = 0
+
+        if love.keyboard.isDown("a") or mobile_controls.buttons.left.pressed then
+            move_x = move_x - 1
+        end
+        if love.keyboard.isDown("d") or mobile_controls.buttons.right.pressed then
+            move_x = move_x + 1
+        end
+        if love.keyboard.isDown("w") or mobile_controls.buttons.forward.pressed then
+            move_y = move_y - 1
+        end
+        if love.keyboard.isDown("s") then
+            move_y = move_y + 1
+        end
+
+        local len = math.sqrt((move_x * move_x) + (move_y * move_y))
+        if len > 0 then
+            move_x = move_x / len
+            move_y = move_y / len
+        end
+
+        local swim_speed = ctx.swim_speed or 70
+        self.x = (self.x or 0) + (move_x * swim_speed * dt)
+        self.y = (self.y or 0) + (move_y * swim_speed * dt)
+        local min_swim_y = (ctx.shore_division or 0) + 30
+        if self.y < min_swim_y then
+            self.y = min_swim_y
+        end
+
+        self.on_foot_x = self.x
+        self.on_foot_y = self.y
+        self.velocity_x = 0
+        self.velocity_y = 0
+        ctx.update_ship_animation(dt)
+        return
+    end
+
     if self.is_on_foot then
         local move_x = 0
         local move_y = 0

@@ -10,6 +10,8 @@ local food_icon_load_attempted = false
 local top_font = nil
 local top_font_load_attempted = false
 
+local constants = require("game.constants")
+
 local function get_radius(radius_fn, role, default_radius, angle)
     if type(radius_fn) == "function" then
         local value = radius_fn(role, default_radius, angle)
@@ -174,8 +176,8 @@ function top.draw(state)
     end
 
     local time_hours = 0
-    if state and state.player and state.player.time_system then
-        local ts = state.player.time_system
+    if state and state.system.player and state.system.player.time_system then
+        local ts = state.system.player.time_system
         local day_length = tonumber(ts.DAY_LENGTH) or 1
         local current_time = tonumber(ts.time) or 0
         time_hours = (current_time / day_length) * 12
@@ -202,8 +204,8 @@ function top.draw(state)
     )
 
     local fishing_level_value = 0
-    if state and state.player and state.constants and state.constants.fishing_level then
-        fishing_level_value = math.floor((state.player.y or 0) / state.constants.fishing_level)
+    if state and state.system.player and state.constants and state.constants.fishing_level then
+        fishing_level_value = math.floor((state.system.player.y or 0) / state.constants.fishing_level)
     end
 
     local second_section_left = start_x + dv
@@ -227,18 +229,23 @@ function top.draw(state)
         )
     end
 
-    love.graphics.setColor(0, 0, 0, 1)
+    if state.system.spawnenemy.is_dangerous_area(fishing_level_value * 1000 + constants.combat.dangerous_area_buffer + 1) then
+        love.graphics.setColor(0.859,  0.016, 0.000)
+    else
+        love.graphics.setColor(0.0, 0.0, 0.0)
+    end
     love.graphics.print(
         string.format("Lv %d", fishing_level_value),
         second_section_left + dv / 2,
         (height - love.graphics.getFont():getHeight()) / 2
     )
+    love.graphics.setColor(0, 0, 0, 1)
 
     local lowest_hunger = 0
-    if state and state.player and type(state.player.hunger_levels) == "table" and #state.player.hunger_levels > 0 then
-        lowest_hunger = tonumber(state.player.hunger_levels[1]) or 0
-        for i = 2, #state.player.hunger_levels do
-            local v = tonumber(state.player.hunger_levels[i]) or 0
+    if state and state.system.player and type(state.system.player.hunger_levels) == "table" and #state.system.player.hunger_levels > 0 then
+        lowest_hunger = tonumber(state.system.player.hunger_levels[1]) or 0
+        for i = 2, #state.system.player.hunger_levels do
+            local v = tonumber(state.system.player.hunger_levels[i]) or 0
             if v < lowest_hunger then
                 lowest_hunger = v
             end

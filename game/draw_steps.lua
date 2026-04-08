@@ -3,6 +3,7 @@ local hunger = require("game.hunger")
 local crew_management = require("game.crew_management")
 local action_display = require("game.action_display")
 local top_bar = require("game.top")
+local storm = require("game.storm")
 
 local PLAYER_SHEET_PATH = "assets/Pirates Red Sprite Sheet.png"
 local SLEEPING_SPRITE_PATH = "assets/sleeping.png"
@@ -69,7 +70,16 @@ end
 
 local function draw_on_foot_player(state, foot_x, foot_y)
     local sheet, quads, sleeping_sprite = load_player_sheet_if_needed()
-    local time_system = state.player.time_system or {}
+    if state.system.player.is_swimming then
+        love.graphics.setColor(0.92, 0.95, 1, 1)
+        love.graphics.circle("fill", foot_x, foot_y, 10)
+        love.graphics.setColor(0.5, 0.65, 0.9, 1)
+        love.graphics.circle("line", foot_x, foot_y, 10)
+        love.graphics.setColor(1, 1, 1, 1)
+        return
+    end
+
+    local time_system = state.system.player.time_system or {}
     local current_time = tonumber(time_system.time) or 0
     local day_length = tonumber(time_system.DAY_LENGTH) or state.constants.time.day_length
 
@@ -121,7 +131,7 @@ local function draw_on_foot_player(state, foot_x, foot_y)
     local dir = on_foot_anim.last_dir
     local base_dir_quads = quads.base[dir] or quads.base.down
     local outfit_dir_quads = quads.outfit[dir] or quads.outfit.down
-    local frame_index = moving and ((math.floor(state.player.time_system.time * 8) % 3) + 1) or 2
+    local frame_index = moving and ((math.floor(state.system.player.time_system.time * 8) % 3) + 1) or 2
     local base_quad = base_dir_quads[frame_index] or base_dir_quads[2]
     local outfit_quad = outfit_dir_quads[frame_index] or outfit_dir_quads[2]
 
@@ -158,7 +168,7 @@ local function prepare_ripple_uniform_data(state)
     local ripple_y_data = {}
     local ripple_time_data = {}
     local ripple_intensity_data = {}
-    local ship_ripples = state.world.ship_ripples
+    local ship_ripples = state.system.world.ship_ripples
     local max_ripples = state.constants.world.max_ripples
 
     for i = 1, max_ripples do
@@ -180,12 +190,12 @@ local function prepare_ripple_uniform_data(state)
 end
 
 function draw_steps.draw_background(state)
-    local water_color = state.actions.get_current_water_color()
-    local player_ship = state.player
-    local camera = state.camera
+    local water_color = state.system.actions.get_current_water_color()
+    local player_ship = state.system.player
+    local camera = state.system.camera
     local size = state.system.size
-    local water_shader = state.shore.water_shader
-    local ship_ripples = state.world.ship_ripples
+    local water_shader = state.system.shore.water_shader
+    local ship_ripples = state.system.world.ship_ripples
 
     love.graphics.clear(0, 0, 0, 1)
 
@@ -194,9 +204,14 @@ function draw_steps.draw_background(state)
     love.graphics.setShader(water_shader)
     water_shader:send("time", player_ship.time_system.time)
     water_shader:send("waterColor", {water_color[1], water_color[2], water_color[3]})
-    water_shader:send("shoreY", state.shore.division)
+    water_shader:send("shoreY", state.system.shore.division)
     water_shader:send("camera", {camera.x, camera.y})
     water_shader:send("resolution", {size.CANVAS_WIDTH, size.CANVAS_HEIGHT})
+    local wave_intensity = 1.0
+    if state.system.water and state.system.water.wave_intensity ~= nil then
+        wave_intensity = tonumber(state.system.water.wave_intensity) or 1.0
+    end
+    water_shader:send("waveIntensity", math.max(0.0, wave_intensity))
     water_shader:send("ripple_count", #ship_ripples)
     water_shader:send("ripple_sources_x", unpack(ripple_x_data))
     water_shader:send("ripple_sources_y", unpack(ripple_y_data))
@@ -212,9 +227,9 @@ function draw_steps.draw_background(state)
 end
 
 function draw_steps.draw_shore(state)
-    local camera = state.camera
+    local camera = state.system.camera
     local size = state.system.size
-    local shore = state.shore
+    local shore = state.system.shore
     local view_width = size.CANVAS_WIDTH / camera.scale
 
     for _, obj in ipairs(shore.objects) do
@@ -239,13 +254,13 @@ end
 local function draw_enemy_in_combat(state, glow_intensity)
     local combat_state = state.combat.state.combat
     local enemy = combat_state.enemy
-    local player_ship = state.player
+    local player_ship = state.system.player
     if not enemy then
         return
     end
 
     if glow_intensity > 0 then
-        state.actions.draw_ship_glow(enemy.x, enemy.y, enemy.radius, {1, 0.5, 0.5}, glow_intensity)
+        state.system.actions.draw_ship_glow(enemy.x, enemy.y, enemy.radius, {1, 0.5, 0.5}, glow_intensity)
     end
 
     love.graphics.push()
@@ -276,7 +291,7 @@ local function draw_enemy_in_combat(state, glow_intensity)
     local text_x = enemy.x - text_width / 2
     local text_y = enemy.y - text_height / 2
 
-    local water_color = state.actions.get_current_water_color()
+    local water_color = state.system.actions.get_current_water_color()
     local inverted_r = 1 - water_color[1]
     local inverted_g = 1 - water_color[2]
     local inverted_b = 1 - water_color[3]
@@ -292,9 +307,9 @@ local function draw_combat_result_text(state)
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
     local combat_state = state.combat.state.combat
-    local player_ship = state.player
+    local player_ship = state.system.player
     local size = state.system.size
-    local camera = state.camera
+    local camera = state.system.camera
 
     if gamestate.get() ~= GameType.COMBAT or not combat_state.result then
         return
@@ -402,7 +417,7 @@ local function draw_catch_texts(state)
 
     local catch_texts = state.fishing.runtime.get_catch_texts()
     local fishing_cooldown = state.fishing.config.fishing_cooldown
-    local player_ship = state.player
+    local player_ship = state.system.player
 
     for _, catch in ipairs(catch_texts) do
         local alpha = catch.time / fishing_cooldown
@@ -412,7 +427,7 @@ local function draw_catch_texts(state)
         local text_x = player_ship.x - 40
         local text_y = player_ship.y - 60 - catch.y_offset
 
-        local water_color = state.actions.get_current_water_color()
+        local water_color = state.system.actions.get_current_water_color()
         local inverted_r = 1 - water_color[1]
         local inverted_g = 1 - water_color[2]
         local inverted_b = 1 - water_color[3]
@@ -428,7 +443,7 @@ local function draw_fishing_and_danger_hud(state)
     local fishing_runtime = state.fishing.runtime
     local fishing_cooldown = fishing_runtime.get_fishing_cooldown()
     local last_cooldown = fishing_runtime.get_last_cooldown()
-    local player_ship = state.player
+    local player_ship = state.system.player
 
     if fishing_cooldown > 0 then
         love.graphics.setColor(1, 1, 1, 0.8)
@@ -456,27 +471,36 @@ local function draw_fishing_and_danger_hud(state)
 end
 
 function draw_steps.draw_world(state)
-    local player_ship = state.player
+    local player_ship = state.system.player
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
     local ship_animation = state.ship_animation
+    local debugOptions = state.system.ui.debug
 
     draw_steps.draw_shore(state)
 
     if not player_ship.time_system.is_sleeping then
+        storm.draw(state)
+
+        local now = (love.timer and love.timer.getTime and love.timer.getTime()) or 0
+        if debugOptions and (tonumber(debugOptions.lightning_active_until) or 0) > now
+            and debugOptions.lightning_top and debugOptions.lightning_bottom then
+            storm.draw_lightning(debugOptions.lightning_top, debugOptions.lightning_bottom)
+        end
+
         -- Draw port-a-shops before actors so player/boat stays in front.
-        state.shop.module.draw_shops(state.camera)
+        state.shop.module.draw_shops(state.system.camera)
         state.shop.module.draw_main_dock(state.shop.keeper)
         state.shop.keeper:draw()
 
-        local ambient_light = state.actions.get_ambient_light()
+        local ambient_light = state.system.actions.get_ambient_light()
         local glow_intensity = math.max(0, 1 - ambient_light)
 
         if gamestate.get() ~= GameType.COMBAT then
             if glow_intensity > 0 then
                 local enemies = state.enemy.module.get_enemies()
                 for _, enemy in ipairs(enemies) do
-                    state.actions.draw_ship_glow(enemy.x, enemy.y, enemy.radius, {1, 0.5, 0.5}, glow_intensity)
+                    state.system.actions.draw_ship_glow(enemy.x, enemy.y, enemy.radius, {1, 0.5, 0.5}, glow_intensity)
                 end
             end
             state.enemy.module.draw()
@@ -484,12 +508,12 @@ function draw_steps.draw_world(state)
             draw_enemy_in_combat(state, glow_intensity)
         end
 
-        if glow_intensity > 0 then
-            state.actions.draw_ship_glow(player_ship.x, player_ship.y, player_ship.radius, {0.5, 0.8, 1}, glow_intensity)
+        if glow_intensity > 0 and not player_ship.is_swimming and not player_ship.boat_hidden_until_morning then
+            state.system.actions.draw_ship_glow(player_ship.x, player_ship.y, player_ship.radius, {0.5, 0.8, 1}, glow_intensity)
         end
 
         local ship_speed = math.sqrt(player_ship.velocity_x^2 + player_ship.velocity_y^2)
-        if not player_ship.is_on_foot and ship_speed > 10 then
+        if not player_ship.is_on_foot and not player_ship.is_swimming and not player_ship.boat_hidden_until_morning and ship_speed > 10 then
             local wake_direction = math.atan2(-player_ship.velocity_y, -player_ship.velocity_x)
             love.graphics.setColor(1, 1, 1, 0.2 * (glow_intensity * 0.5 + 0.5))
             for i = 1, 3 do
@@ -501,41 +525,43 @@ function draw_steps.draw_world(state)
             end
         end
 
-        love.graphics.push()
-        love.graphics.translate(player_ship.x, player_ship.y)
-        love.graphics.rotate(player_ship.rotation + math.pi)
-        love.graphics.scale(ship_animation.scale, ship_animation.scale)
+        if not player_ship.is_swimming and not player_ship.boat_hidden_until_morning then
+            love.graphics.push()
+            love.graphics.translate(player_ship.x, player_ship.y)
+            love.graphics.rotate(player_ship.rotation + math.pi)
+            love.graphics.scale(ship_animation.scale, ship_animation.scale)
 
-        love.graphics.setColor(player_ship.color)
-        local target_width = 64
-        local sprite_scale = target_width / player_ship.sprite:getWidth()
+            love.graphics.setColor(player_ship.color)
+            local target_width = 64
+            local sprite_scale = target_width / player_ship.sprite:getWidth()
 
-        love.graphics.draw(
-            player_ship.sprite,
-            0,
-            0,
-            0,
-            sprite_scale,
-            sprite_scale,
-            player_ship.sprite:getWidth() / 2,
-            player_ship.sprite:getHeight() / 2
-        )
-
-        if state.fishing.event.caught_gold_sturgeon then
-            love.graphics.setColor(1, 0.8, 0, 0.5)
             love.graphics.draw(
                 player_ship.sprite,
                 0,
-                10,
+                0,
                 0,
                 sprite_scale,
                 sprite_scale,
                 player_ship.sprite:getWidth() / 2,
                 player_ship.sprite:getHeight() / 2
             )
-        end
 
-        love.graphics.pop()
+            if state.fishing.event.caught_gold_sturgeon then
+                love.graphics.setColor(1, 0.8, 0, 0.5)
+                love.graphics.draw(
+                    player_ship.sprite,
+                    0,
+                    10,
+                    0,
+                    sprite_scale,
+                    sprite_scale,
+                    player_ship.sprite:getWidth() / 2,
+                    player_ship.sprite:getHeight() / 2
+                )
+            end
+
+            love.graphics.pop()
+        end
 
         -- Draw the ship name in world space so it stays upright and below the ship.
         love.graphics.setColor(1, 1, 1, 1)
@@ -563,10 +589,19 @@ function draw_steps.draw_post_world_overlays(state)
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
     local size = state.system.size
-    local time_system = state.player.time_system
+    local time_system = state.system.player.time_system
+    local current_state = gamestate.get()
 
-    if gamestate.get():find("shop", 1, true) then
+    if current_state:find("shop", 1, true) then
         state.shop.module.draw_ui(gamestate)
+    end
+
+    if current_state == GameType.SHIPWRECKED then
+        local drowning_duration = tonumber(state.constants.ship.drowning_time) or 25
+        local drowning_left = tonumber(state.drowning) or drowning_duration
+        local t = 1 - math.max(0, math.min(1, drowning_left / math.max(0.001, drowning_duration)))
+        love.graphics.setColor(0.06, 0.26, 0.95, t)
+        love.graphics.rectangle("fill", 0, 0, size.CANVAS_WIDTH, size.CANVAS_HEIGHT)
     end
 
     if time_system.is_fading or time_system.fade_alpha > 0 then
@@ -582,19 +617,19 @@ function draw_steps.draw_post_world_overlays(state)
         end
     end
 
-    if gamestate.get() == GameType.FISHING then
+    if current_state == GameType.FISHING then
         state.fishing.minigame.draw()
     end
 
     crew_management.draw_overlay(state)
-    state.ui.morningtext.draw(state)
+    state.system.ui.morningtext.draw(state)
 end
 
 function draw_steps.draw_time_and_debug(state)
-    local player_ship = state.player
-    local debugOptions = state.ui.debug
-    local suit = state.ui.suit
-    local mobile_controls = state.ui.mobile
+    local player_ship = state.system.player
+    local debugOptions = state.system.ui.debug
+    local suit = state.system.ui.suit
+    local mobile_controls = state.system.ui.mobile
     local fishing = state.fishing.module
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
@@ -609,7 +644,7 @@ function draw_steps.draw_time_and_debug(state)
     love.graphics.setColor(1, 1, 1, 1)
     top_bar.draw(state)
     hunger.draw_hud(state)
-    state.ui.alert.draw(state.system.size)
+    state.system.ui.alert.draw(state.system.size)
     mobile_controls.hide_fish_button = false
 
     if gamestate.get() == GameType.VOYAGE then
@@ -699,8 +734,8 @@ function draw_steps.draw_time_and_debug(state)
 
         if suit.Button("Gold Sturgeon Time", suit.layout:row(150, 30)).hit then
             player_ship.time_system.time = (11.5 / 12) * player_ship.time_system.DAY_LENGTH
-            state.actions.get_current_water_color()
-            state.actions.trigger_special_fish_event("Gold Sturgeon")
+            state.system.actions.get_current_water_color()
+            state.system.actions.trigger_special_fish_event("Gold Sturgeon")
             print("Time set to 11:30 and Gold Sturgeon event triggered!")
         end
 
@@ -709,7 +744,7 @@ function draw_steps.draw_time_and_debug(state)
             player_ship.rainbows = math.max(tonumber(player_ship.rainbows) or 0, start_value)
             state.system.serialize.save_data(state.system.game.get_saveable_data())
             print(string.format("Rainbows set to %.1f", player_ship.rainbows))
-            state.actions.force_corruption_sleep_if_needed()
+            state.system.actions.force_corruption_sleep_if_needed()
         end
 
         love.graphics.print("Debug Mode (F3 to toggle)", 10, 100)
@@ -739,7 +774,7 @@ function draw_steps.draw_time_and_debug(state)
             print("--- shore debug info ---")
             print(string.format("Player Position: x=%.2f, y=%.2f", player_ship.x, player_ship.y))
             print("Shore Object Positions:")
-            for i, obj in ipairs(state.shore.objects) do
+            for i, obj in ipairs(state.system.shore.objects) do
                 print(string.format("  [%d]: x=%.2f, y=%.2f", i, obj.x, obj.y))
             end
             print("------------------------")
@@ -747,7 +782,7 @@ function draw_steps.draw_time_and_debug(state)
 
         if suit.Button("Spawn Enemy At Y", suit.layout:row(150, 30)).hit then
             local ok = state.enemy.module.spawn_at_y(
-                state.camera,
+                state.system.camera,
                 player_ship.y,
                 player_ship.y
             )
@@ -756,6 +791,22 @@ function draw_steps.draw_time_and_debug(state)
             else
                 print("Could not spawn enemy (max enemies reached or invalid camera/y)")
             end
+        end
+
+        if suit.Button("Trigger Storm (Night)", suit.layout:row(180, 30)).hit then
+            local day_length = tonumber(player_ship.time_system.DAY_LENGTH) or 720
+            player_ship.time_system.time = day_length * (11 / 12)
+            storm.debug_start(state)
+            print("storm triggered and time set to night")
+        end
+
+        if suit.Button("Toggle Wave Intensity (0/3)", suit.layout:row(190, 30)).hit then
+            if not state.system.water then
+                state.system.water = {wave_intensity = 1.0}
+            end
+            local current = tonumber(state.system.water.wave_intensity) or 0
+            state.system.water.wave_intensity = (current >= 2.5) and 0 or 3
+            print(string.format("Wave intensity set to %.1f", state.system.water.wave_intensity))
         end
 
         if suit.Button("Print Collision Debug", suit.layout:row(150, 30)).hit then
@@ -784,12 +835,12 @@ function draw_steps.draw_final_ui(state)
         love.graphics.rectangle("fill", 0, 0, state.system.size.CANVAS_WIDTH, state.system.size.CANVAS_HEIGHT)
     end
 
-    if state.ui.mobile.enabled and not in_shop and not crew_panel_open then -- hide mobile button
-        state.actions.draw_mobile_controls()
+    if state.system.ui.mobile.enabled and not in_shop and not crew_panel_open then -- hide mobile button
+        state.system.actions.draw_mobile_controls()
     end
 
     love.graphics.setColor(1, 1, 1, 1)
-    state.ui.suit.draw()
+    state.system.ui.suit.draw()
 end
 
 function draw_steps.draw_special_event_overlay(state)

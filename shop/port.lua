@@ -527,6 +527,97 @@ function port.create(deps)
         return true
     end
 
+    function api.try_land_swimmer(player_ship)
+        if not player_ship or not player_ship.is_swimming then
+            return false
+        end
+
+        local px = tonumber(player_ship.x) or 0
+        local py = tonumber(player_ship.y) or 0
+        local touch_radius = tonumber(player_ship.radius) or 20
+
+        local function finalize_land(land_x, land_y)
+            player_ship.is_swimming = false
+            player_ship.is_on_foot = true
+            player_ship.velocity_x = 0
+            player_ship.velocity_y = 0
+            player_ship.pending_shop_interaction = false
+            player_ship.shipwreck_landed = true
+            player_ship.shipwreck_sleep_timer = 0
+            player_ship.x = land_x
+            player_ship.y = land_y
+            player_ship.on_foot_x = land_x
+            player_ship.on_foot_y = land_y
+            return true
+        end
+
+        -- Main shore / island landing.
+        local shoreline_touch_y = SHORE_DIVISION + touch_radius + 6
+        if py <= shoreline_touch_y then
+            player_ship.docked_port_shop_index = nil
+            player_ship.dock_walk_mode = "shore"
+            player_ship.dock_walk_center_x = px
+            player_ship.dock_walk_center_y = SHORE_DIVISION
+            player_ship.dock_walk_dock_x = nil
+            player_ship.dock_walk_dock_y = nil
+            player_ship.shipwreck_land_dock_x = nil
+            player_ship.shipwreck_land_dock_y = nil
+            player_ship.dock_walk_island_radius = nil
+            player_ship.dock_walk_dock_half_width = nil
+            player_ship.dock_walk_dock_height = nil
+            player_ship.dock_walk_max_side = nil
+            player_ship.dock_walk_max_up = nil
+            player_ship.dock_walk_max_down = nil
+            return finalize_land(px, math.max(SHORE_DIVISION + 10, py))
+        end
+
+        -- Port-a-shop island landing.
+        for index, shop_data in ipairs(port_a_shops) do
+            if shop_data.is_spawned then
+                local island_cx, island_cy = get_port_island_center(shop_data)
+                local island = get_cached_port_shop_island(index)
+                local island_radius = island and island.radius or 44
+                local dx = px - island_cx
+                local dy = py - island_cy
+                local dist_sq = (dx * dx) + (dy * dy)
+                local touch_dist = island_radius + touch_radius + 4
+                if dist_sq <= (touch_dist * touch_dist) then
+                    local dist = math.sqrt(dist_sq)
+                    if dist <= 0.0001 then
+                        dx = 1
+                        dy = 0
+                        dist = 1
+                    end
+                    local nx = dx / dist
+                    local ny = dy / dist
+                    local land_radius = math.max(4, island_radius - 2)
+                    local land_x = island_cx + nx * land_radius
+                    local land_y = island_cy + ny * land_radius
+                    local dock_x, dock_y = get_port_shop_dock_position(shop_data, index)
+
+                    player_ship.docked_port_shop_index = index
+                    player_ship.dock_walk_mode = "island"
+                    player_ship.dock_walk_center_x = island_cx
+                    player_ship.dock_walk_center_y = island_cy
+                    player_ship.dock_walk_dock_x = dock_x
+                    player_ship.dock_walk_dock_y = dock_y
+                    player_ship.shipwreck_land_dock_x = dock_x
+                    player_ship.shipwreck_land_dock_y = dock_y
+                    player_ship.dock_walk_island_radius = island_radius - 1
+                    player_ship.dock_walk_dock_half_width = (PORT_DOCK_WIDTH * 0.5) + 2
+                    player_ship.dock_walk_dock_height = PORT_DOCK_HEIGHT + 2
+                    player_ship.dock_walk_max_side = island_radius + 12
+                    player_ship.dock_walk_max_up = island_radius + PORT_DOCK_HEIGHT + 12
+                    player_ship.dock_walk_max_down = island_radius + 8
+
+                    return finalize_land(land_x, land_y)
+                end
+            end
+        end
+
+        return false
+    end
+
     function api.can_talk_to_port_shopkeeper(player_ship)
         return get_active_port_shop_index_for_player(player_ship) ~= nil
     end

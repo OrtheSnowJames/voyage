@@ -2,7 +2,9 @@ local TARGET_SCORE = 200
 
 return {
     on_load = function(state, api)
-        local minigame = state and state.fishing and state.fishing.minigame
+        local system = state and state.system or nil
+        local fishing_state = (system and system.fishing_state) or (state and state.fishing) or nil
+        local minigame = fishing_state and fishing_state.minigame
         if type(minigame) ~= "table" then
             if api and api.log then
                 api.log("always_200_fishing_score: minigame not available")

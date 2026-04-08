@@ -2,6 +2,7 @@ local spawnenemy = {}
 local size = require("game.size")
 local constants = require("game.constants")
 local FISHING_LEVEL = constants.fishing_level
+local DANGEROUS_AREA_BUFFER = constants.combat.dangerous_area_buffer
 
 -- configuration
 local ENEMY_SPAWN_INTERVAL = 10  -- seconds between enemy spawns
@@ -103,7 +104,7 @@ local function is_dangerous_area(y)
     local last_shop_y = shop.get_last_port_a_shop_y()
 
     -- if the player's y is greater than the last shop's y (plus a buffer), it's dangerous.
-    if math.abs(y) > last_shop_y + 100 then
+    if math.abs(y) > last_shop_y + DANGEROUS_AREA_BUFFER then
         return true
     end
 
@@ -458,6 +459,8 @@ function spawnenemy.set_corruption_state(level, radius)
     corruption_level = math.max(0, tonumber(level) or 0)
     pull_radius = math.max(0, tonumber(radius) or 0)
 end
+
+spawnenemy.is_dangerous_area = is_dangerous_area
 
 function spawnenemy.spawn_at_y(camera, spawn_y, size_source_y, spawn_side)
     local y_value = tonumber(spawn_y)
