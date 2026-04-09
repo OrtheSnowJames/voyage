@@ -484,7 +484,7 @@ function minigame_module.create(deps)
         local hold_ready = minigame_state.entered_catch_circle
             and minigame_state.touched_center_after_entry
             and minigame_state.held_middle_forever
-        local hold_text = hold_ready and "Hold Bonus Active" or "Hold Bonus Lost"
+        local hold_text = hold_ready and "Hold Bonus" or "No Hold Bonus"
         local hold_color = hold_ready and {0.35, 1, 0.5} or {1, 0.45, 0.45}
 
         love.graphics.setColor(0.11, 0.13, 0.16, 0.9)

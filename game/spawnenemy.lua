@@ -21,6 +21,9 @@ local SHOP_LINE_NO_FOLLOW_DISTANCE = 10  -- much tighter than spawn safety zone
 local EXCESSIVE_SPAWN_INTERVAL = 0.1  -- seconds between spawns in dangerous areas
 local MAX_ENEMIES_ON_SCREEN = 20  -- maximum enemies visible at once
 local DESPAWN_MARGIN = 200  -- enemies despawn when this far outside view
+local FLOCK_SPAWN_CHANCE_DENOMINATOR = 20  -- 1 in 20 chance
+local FLOCK_VERTICAL_SCATTER = 70
+local FLOCK_HORIZONTAL_SCATTER = 50
 local MULTIPLIER_DANGEROUS_AREA = 7
 -- load enemy boat sprite
 local enemy_boat_sprite = love.graphics.newImage("assets/boat.png")
@@ -157,6 +160,44 @@ local function build_enemy_spawn(camera, spawn_y, size_source_y, spawn_side)
     return enemy, dangerous
 end
 
+local function spawn_flock(camera, center_y, size_source_y, spawn_side, min_y, max_y)
+    local remaining_slots = MAX_ENEMIES_ON_SCREEN - #enemies
+    if remaining_slots <= 0 then
+        return 0
+    end
+
+    local spawned = 0
+    local side = spawn_side
+    if side ~= "left" and side ~= "right" then
+        side = (math.random() < 0.5) and "left" or "right"
+    end
+
+    for _ = 1, remaining_slots do
+        local spawn_y = center_y + ((love.math.random() * 2 - 1) * FLOCK_VERTICAL_SCATTER)
+        if min_y and max_y then
+            spawn_y = math.max(min_y, math.min(max_y, spawn_y))
+        end
+
+        if is_near_shop(spawn_y) then
+            local adjusted = center_y
+            if min_y and max_y then
+                adjusted = math.max(min_y, math.min(max_y, adjusted))
+            end
+            spawn_y = adjusted
+        end
+
+        local enemy = build_enemy_spawn(camera, spawn_y, size_source_y, side)
+        if enemy then
+            local x_jitter = (love.math.random() * 2 - 1) * FLOCK_HORIZONTAL_SCATTER
+            enemy.x = enemy.x + x_jitter
+            enemy.heading = (enemy.heading or (enemy.direction > 0 and 0 or math.pi)) + ((love.math.random() * 2 - 1) * 0.25)
+            spawned = spawned + 1
+        end
+    end
+
+    return spawned
+end
+
 function spawnenemy.update(dt, camera, player_x, player_y)
     -- calculate viewport boundaries
     local view_width = size.CANVAS_WIDTH / camera.scale
@@ -251,8 +292,21 @@ function spawnenemy.update(dt, camera, player_x, player_y)
             -- only spawn if we found a valid position
                 if spawn_y then
                     print("DEBUG: Spawn position found at Y=" .. spawn_y .. ", proceeding with enemy creation")
-                    local _, spawned_in_danger = build_enemy_spawn(camera, spawn_y, player_y)
-                    local enemy_speed = enemies[#enemies] and enemies[#enemies].speed or 0
+                    local remaining_slots = MAX_ENEMIES_ON_SCREEN - #enemies
+                    local should_spawn_flock = remaining_slots > 0 and math.random(1, FLOCK_SPAWN_CHANCE_DENOMINATOR) == 1
+                    local spawn_side = (math.random() < 0.5) and "left" or "right"
+                    local spawned_in_danger = resolve_is_dangerous_area(spawn_y)
+                    local enemy_speed = 0
+
+                    if should_spawn_flock then
+                        local spawned_count = spawn_flock(camera, spawn_y, player_y, spawn_side, min_y, max_y)
+                        enemy_speed = enemies[#enemies] and enemies[#enemies].speed or 0
+                        print("FLOCK SPAWN: spawned " .. spawned_count .. " enemies in a tight cluster")
+                    else
+                        local _, danger = build_enemy_spawn(camera, spawn_y, player_y, spawn_side)
+                        spawned_in_danger = danger
+                        enemy_speed = enemies[#enemies] and enemies[#enemies].speed or 0
+                    end
                     
                     -- print spawn info for debugging
                     if spawned_in_danger then
@@ -476,6 +530,26 @@ function spawnenemy.spawn_at_y(camera, spawn_y, size_source_y, spawn_side)
 
     build_enemy_spawn(camera, y_value, size_source_y, spawn_side)
     return true
+end
+
+function spawnenemy.spawn_flock_at_y(camera, center_y, size_source_y, spawn_side)
+    local y_value = tonumber(center_y)
+    if not camera or type(camera) ~= "table" or not y_value then
+        return 0
+    end
+    if #enemies >= MAX_ENEMIES_ON_SCREEN then
+        return 0
+    end
+
+    local view_height = love.graphics.getHeight() / camera.scale
+    local min_y = math.max(200, camera.y)
+    local max_y = camera.y + view_height - SPAWN_MARGIN
+    if max_y <= min_y then
+        return 0
+    end
+
+    local clamped_center_y = math.max(min_y, math.min(max_y, y_value))
+    return spawn_flock(camera, clamped_center_y, size_source_y, spawn_side, min_y, max_y)
 end
 
 return spawnenemy

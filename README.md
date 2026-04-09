@@ -15,12 +15,15 @@ Voyage is a sailing and grinding game about managing a crew, taking risks, and p
 
 Press `F` to fish. Your crew fishes automatically after the cooldown.
 
+* Hold bonus: enter the catch circle, reach center within 2 seconds, then stay centered for `+60` quality score.
+
 ### Crew & Combat
 
 * More crew than the enemy = victory
 * Fewer crew = defeat (and save loss)
 * Winning gives you **fainted enemy crew** you can recover
 * Stronger swords reduce your losses
+* Rare flock spawns (1 in 20) can fill remaining enemy slots with a tight enemy cluster.
 
 Bringing way more crew than the enemy causes **carelessness**, leading to heavy losses (most of your crew).
 
@@ -45,6 +48,21 @@ Bringing way more crew than the enemy causes **carelessness**, leading to heavy 
 * Buy upgrades
 * Heal crew
 * Store valuable fish
+
+### Storms
+
+Storms have about a 1/10 chance of happening, but the chance gets higher the further out you are 
+(similar to real life).
+
+* Spawn at night around 9 o' clock
+* Lightning can strike your boat
+* If lightning strikes your boat, you have to swim to shore so you don't drown. Most of your stuff will be lost at sea.
+* Staying on an island is your best bet.
+
+### Mods
+
+* Built-in mod loader (terminal) with enable/disable and a lua repl because why not
+* Mods are loaded from `mods/` and can hook into runtime systems
 
 ## Running the Game
 

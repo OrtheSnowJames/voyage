@@ -785,6 +785,19 @@ function draw_steps.draw_time_and_debug(state)
             end
         end
 
+        if suit.Button("Spawn Enemy Flock", suit.layout:row(150, 30)).hit then
+            local spawned = state.enemy.module.spawn_flock_at_y(
+                state.system.camera,
+                player_ship.y,
+                player_ship.y
+            )
+            if spawned > 0 then
+                print(string.format("Spawned flock of %d enemies at y=%.2f", spawned, player_ship.y))
+            else
+                print("Could not spawn flock (max enemies reached or invalid camera/y)")
+            end
+        end
+
         if suit.Button("Trigger Storm (Night)", suit.layout:row(180, 30)).hit then
             local day_length = tonumber(player_ship.time_system.DAY_LENGTH) or 720
             player_ship.time_system.time = day_length * (11 / 12)
