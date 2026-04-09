@@ -366,155 +366,167 @@ function minigame_module.create(deps)
 
         local screen_width = size.CANVAS_WIDTH
         local screen_height = size.CANVAS_HEIGHT
-        local bar_x = (screen_width - BAR_WIDTH) / 2
-        local bar_y = (screen_height - BAR_HEIGHT) / 2
+        local panel_width = math.min(screen_width - 80, 560)
+        local panel_height = BAR_HEIGHT + 120
+        local panel_x = (screen_width - panel_width) / 2
+        local panel_y = (screen_height - panel_height) / 2
+        local panel_radius = 12
 
-        love.graphics.setColor(0, 0, 0, 0.8)
-        love.graphics.rectangle("fill", bar_x - 30, bar_y - 20, BAR_WIDTH + 60, BAR_HEIGHT + 40)
+        local progress_width = 24
+        local progress_padding = 20
+        local bar_x = panel_x + progress_padding + progress_width + 16
+        local bar_y = panel_y + 70
+
+        local info_panel_x = bar_x + BAR_WIDTH + 20
+        local info_panel_w = panel_x + panel_width - info_panel_x - 16
+        local info_panel_y = bar_y
+        local info_panel_h = BAR_HEIGHT
+
+        love.graphics.setColor(0, 0, 0, 0.55)
+        love.graphics.rectangle("fill", 0, 0, screen_width, screen_height)
+
+        love.graphics.setColor(0.06, 0.08, 0.1, 0.92)
+        love.graphics.rectangle("fill", panel_x, panel_y, panel_width, panel_height, panel_radius, panel_radius)
+        love.graphics.setColor(0.2, 0.28, 0.32, 1)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", panel_x, panel_y, panel_width, panel_height, panel_radius, panel_radius)
+
+        local fish_text = "Fish: " .. minigame_state.fish_name
+        local instruction_text = "Circle mouse to steer the hook"
+        local header_y = panel_y + 14
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.print(fish_text, panel_x + 16, header_y)
+        love.graphics.setColor(0.78, 0.86, 0.9, 1)
+        love.graphics.print(instruction_text, panel_x + 16, header_y + 20)
+
+        local time_text = string.format("Time %.1fs", minigame_state.total_time)
+        local touches_text = string.format("Walls %d", minigame_state.touches)
+        local right_header_x = panel_x + panel_width - 16
+        love.graphics.setColor(1, 1, 1, 0.95)
+        love.graphics.print(time_text, right_header_x - love.graphics.getFont():getWidth(time_text), header_y)
+        love.graphics.setColor(0.9, 0.9, 0.95, 0.9)
+        love.graphics.print(touches_text, right_header_x - love.graphics.getFont():getWidth(touches_text), header_y + 20)
+
+        love.graphics.setColor(0.12, 0.14, 0.17, 0.9)
+        love.graphics.rectangle("fill", progress_padding + panel_x, bar_y, progress_width, BAR_HEIGHT, 6, 6)
+        local filled_height = BAR_HEIGHT * minigame_state.catch_progress
+        local progress_color = {0.08, 0.8, 0.42}
+        if minigame_state.catch_progress < 0.3 then
+            progress_color = {0.9, 0.35, 0.3}
+        elseif minigame_state.catch_progress < 0.6 then
+            progress_color = {0.95, 0.75, 0.2}
+        end
+        love.graphics.setColor(progress_color[1], progress_color[2], progress_color[3], 1)
+        love.graphics.rectangle("fill", progress_padding + panel_x, bar_y + BAR_HEIGHT - filled_height, progress_width, filled_height, 6, 6)
+        love.graphics.setColor(0.85, 0.9, 0.95, 0.7)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", progress_padding + panel_x, bar_y, progress_width, BAR_HEIGHT, 6, 6)
 
         local water_color = minigame_state.water_color or {0.1, 0.3, 0.6}
         for i = 0, BAR_HEIGHT - 1 do
             local progress = i / BAR_HEIGHT
-            local darken_factor = 0.7 + (progress * 0.3)
+            local darken_factor = 0.66 + (progress * 0.34)
             love.graphics.setColor(water_color[1] * darken_factor, water_color[2] * darken_factor, water_color[3] * darken_factor, 1)
             love.graphics.rectangle("fill", bar_x, bar_y + i, BAR_WIDTH, 1)
         end
 
-        love.graphics.setColor(1, 1, 1, 0.3)
-        love.graphics.setLineWidth(2)
+        love.graphics.setColor(0.9, 0.95, 1, 0.2)
+        love.graphics.setLineWidth(1)
         for i = 1, BAR_LEVELS - 1 do
             local y = bar_y + i * LEVEL_HEIGHT
             love.graphics.line(bar_x, y, bar_x + BAR_WIDTH, y)
         end
 
-        love.graphics.setColor(1, 1, 1, 0.7)
-        for i = 1, BAR_LEVELS do
-            local y = bar_y + (i - 1) * LEVEL_HEIGHT + LEVEL_HEIGHT / 2
-            local level_text = "Level " .. i
-            local text_width = love.graphics.getFont():getWidth(level_text)
-            love.graphics.print(level_text, bar_x - text_width - 15, y - 10)
-
-            local difficulty_text = string.format("x%.1f", 1 + (i - 1) * 0.5)
-            love.graphics.print(difficulty_text, bar_x + BAR_WIDTH + 15, y - 10)
-        end
+        love.graphics.setColor(0.85, 0.9, 0.95, 0.7)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", bar_x, bar_y, BAR_WIDTH, BAR_HEIGHT, 8, 8)
 
         local fish_x = bar_x + BAR_WIDTH / 2
         local fish_y = bar_y + minigame_state.fish_position
-
-        love.graphics.setColor(1, 0, 0, 0.1)
+        love.graphics.setColor(1, 0.28, 0.28, 0.12)
         love.graphics.circle("fill", fish_x, fish_y, CATCH_RANGE)
-        love.graphics.setColor(1, 0, 0, 0.3)
+        love.graphics.setColor(1, 0.45, 0.45, 0.45)
         love.graphics.circle("line", fish_x, fish_y, CATCH_RANGE)
-
-        love.graphics.setColor(0, 1, 0, 0.25)
+        love.graphics.setColor(0.3, 1, 0.6, 0.65)
         love.graphics.circle("fill", fish_x, fish_y, 5)
-        love.graphics.setColor(0, 1, 0, 0.6)
-        love.graphics.circle("line", fish_x, fish_y, 5)
 
         local icon_scale = 0.8
-        love.graphics.push()
-        love.graphics.stencil(function()
-            love.graphics.setColor(1, 1, 1, 1)
-            love.graphics.draw(fish_icon, fish_x, fish_y, 0, icon_scale, icon_scale, fish_icon_width / 2, fish_icon_height / 2)
-        end, "replace", 1)
-        love.graphics.setStencilTest("greater", 0)
-        love.graphics.setBlendMode("alpha")
-        love.graphics.setColor(0, 1, 0, 0.4)
-        love.graphics.circle("fill", fish_x, fish_y, 5)
-        love.graphics.setStencilTest()
-        love.graphics.pop()
-
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.draw(fish_icon, fish_x, fish_y, 0, icon_scale, icon_scale, fish_icon_width / 2, fish_icon_height / 2)
 
         local rod_x = bar_x + BAR_WIDTH / 2
         local rod_y = bar_y + minigame_state.rod_position
+        local distance_to_fish = math.abs(minigame_state.rod_position - minigame_state.fish_position)
+        local is_near_fish = distance_to_fish <= CATCH_RANGE
+        local is_centered = distance_to_fish <= 5
 
-        love.graphics.setColor(0.8, 0.8, 0.8, 0.8)
+        love.graphics.setColor(0.85, 0.9, 0.95, 0.75)
         love.graphics.setLineWidth(2)
         love.graphics.line(bar_x + BAR_WIDTH / 2, bar_y, rod_x, rod_y)
 
-        local distance_to_fish = math.abs(minigame_state.rod_position - minigame_state.fish_position)
-        local is_near_fish = distance_to_fish <= CATCH_RANGE
-
-        love.graphics.setColor(is_near_fish and 0 or 1, 1, is_near_fish and 0 or 1, 1)
+        love.graphics.setColor(0.1, 0.9, 0.45, 1)
         love.graphics.circle("fill", rod_x, rod_y, 8)
-        love.graphics.setColor(1, 0, 0, 1)
+        love.graphics.setColor(0.95, 0.2, 0.25, 1)
         love.graphics.circle("fill", rod_x, rod_y, 5)
 
         if is_near_fish then
-            if distance_to_fish <= 5 then
-                love.graphics.setColor(0, 1, 0, 0.6)
+            if is_centered then
+                love.graphics.setColor(0.3, 1, 0.5, 0.8)
             else
-                love.graphics.setColor(1, 0, 0, 0.4)
+                love.graphics.setColor(1, 0.45, 0.3, 0.8)
             end
-            love.graphics.circle("line", rod_x, rod_y, 8)
+            love.graphics.circle("line", rod_x, rod_y, 11)
         end
 
-        local mouse_x, mouse_y = love.mouse.getPosition()
-        local movement_intensity = math.min(math.sqrt((mouse_x - minigame_state.last_mouse_x)^2 + (mouse_y - minigame_state.last_mouse_y)^2) / 50, 1.0)
-        if movement_intensity > 0.1 then
-            love.graphics.setColor(1, 1, 0, movement_intensity * 0.5)
-            love.graphics.circle("line", rod_x, rod_y, 12 + movement_intensity * 8)
-        end
+        local progress_text = string.format("Catch %d%%", math.floor(minigame_state.catch_progress * 100 + 0.5))
+        local status_text = is_centered and "Centered" or (is_near_fish and "In Range" or "Out Of Range")
+        local status_color = is_centered and {0.35, 1, 0.5} or (is_near_fish and {1, 0.8, 0.35} or {1, 0.45, 0.45})
+        local hold_ready = minigame_state.entered_catch_circle
+            and minigame_state.touched_center_after_entry
+            and minigame_state.held_middle_forever
+        local hold_text = hold_ready and "Hold Bonus Active" or "Hold Bonus Lost"
+        local hold_color = hold_ready and {0.35, 1, 0.5} or {1, 0.45, 0.45}
 
-        local progress_x = bar_x - 40
-        local progress_y = bar_y
-        local progress_width = 20
-        local progress_height = BAR_HEIGHT
+        love.graphics.setColor(0.11, 0.13, 0.16, 0.9)
+        love.graphics.rectangle("fill", info_panel_x, info_panel_y, info_panel_w, info_panel_h, 10, 10)
+        love.graphics.setColor(0.24, 0.31, 0.36, 1)
+        love.graphics.rectangle("line", info_panel_x, info_panel_y, info_panel_w, info_panel_h, 10, 10)
 
-        love.graphics.setColor(0.2, 0.2, 0.2, 1)
-        love.graphics.rectangle("fill", progress_x, progress_y, progress_width, progress_height)
+        local info_x = info_panel_x + 12
+        local line_y = info_panel_y + 12
+        love.graphics.setColor(0.95, 0.97, 1, 1)
+        love.graphics.print(progress_text, info_x, line_y)
+        line_y = line_y + 22
 
-        love.graphics.setColor(0, 1, 0, 1)
-        local filled_height = progress_height * minigame_state.catch_progress
-        love.graphics.rectangle("fill", progress_x, progress_y + progress_height - filled_height, progress_width, filled_height)
+        love.graphics.setColor(status_color[1], status_color[2], status_color[3], 1)
+        love.graphics.print(status_text, info_x, line_y)
+        line_y = line_y + 22
 
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.setLineWidth(2)
-        love.graphics.rectangle("line", progress_x, progress_y, progress_width, progress_height)
+        love.graphics.setColor(hold_color[1], hold_color[2], hold_color[3], 1)
+        love.graphics.print(hold_text, info_x, line_y)
+        line_y = line_y + 30
 
-        local instruction_text = "Move mouse in circles to control rod (faster movement = more force)"
-        local text_width = love.graphics.getFont():getWidth(instruction_text)
-        love.graphics.print(instruction_text, (screen_width - text_width) / 2, bar_y + BAR_HEIGHT + 30)
+        love.graphics.setColor(0.85, 0.9, 0.95, 0.95)
+        love.graphics.print("Potential Catches", info_x, line_y)
+        line_y = line_y + 20
 
-        local fish_text = "Fish: " .. minigame_state.fish_name
-        love.graphics.print(fish_text, (screen_width - love.graphics.getFont():getWidth(fish_text)) / 2, bar_y - 50)
-
-        local time_text = string.format("Time: %.1fs", minigame_state.total_time)
-        love.graphics.print(time_text, (screen_width - love.graphics.getFont():getWidth(time_text)) / 2, bar_y - 30)
-
-        love.graphics.setColor(1, 1, 1, 0.8)
-        local fish_list_x = bar_x + BAR_WIDTH + 40
-        love.graphics.print("Potential Catches:", fish_list_x, bar_y)
+        local max_list_rows = 9
         for i, fish_name in ipairs(minigame_state.available_fish) do
-            love.graphics.print("- " .. fish_name, fish_list_x, bar_y + 20 * i)
+            if i > max_list_rows then
+                love.graphics.setColor(0.7, 0.76, 0.82, 1)
+                love.graphics.print("...", info_x, line_y)
+                break
+            end
+            love.graphics.setColor(0.9, 0.94, 0.97, 0.95)
+            love.graphics.print("- " .. fish_name, info_x, line_y)
+            line_y = line_y + 18
         end
 
-        local progress_text = string.format("Catch: %.0f%%", minigame_state.catch_progress * 100)
-        love.graphics.print(progress_text, (screen_width - love.graphics.getFont():getWidth(progress_text)) / 2, bar_y + BAR_HEIGHT + 10)
-
-        local touches_text = "Touches: " .. minigame_state.touches
-        love.graphics.print(touches_text, (screen_width - love.graphics.getFont():getWidth(touches_text)) / 2, bar_y + BAR_HEIGHT + 50)
-
-        local center_x = size.CANVAS_WIDTH / 2
-        local center_y = size.CANVAS_HEIGHT / 2
-        local dx = mouse_x - center_x
-        local dy = mouse_y - center_y
-        local mouse_movement = math.sqrt((mouse_x - minigame_state.last_mouse_x)^2 + (mouse_y - minigame_state.last_mouse_y)^2)
-
-        local debug_y = bar_y + BAR_HEIGHT + 90
-        local debug_x = (screen_width - 200) / 2
-
-        love.graphics.print("Mouse: (" .. math.floor(dx) .. ", " .. math.floor(dy) .. ")", debug_x, debug_y)
-        love.graphics.print("Movement: " .. string.format("%.1f", mouse_movement), debug_x, debug_y + 20)
-        love.graphics.print("Force: " .. string.format("%.1f", minigame_state.rod_velocity), debug_x, debug_y + 40)
-        love.graphics.print("Catch Range: " .. CATCH_RANGE, debug_x, debug_y + 60)
-        love.graphics.print("Perfect: " .. string.format("%.1f", minigame_state.time_in_perfect) .. "s", debug_x, debug_y + 80)
-        love.graphics.print("Catch: " .. string.format("%.1f", minigame_state.time_in_catch) .. "s", debug_x, debug_y + 100)
-
-        local escape_text = "Press ESC to cancel fishing"
-        love.graphics.print(escape_text, (screen_width - love.graphics.getFont():getWidth(escape_text)) / 2, bar_y + BAR_HEIGHT + 70)
+        local footer_text = "ESC to cancel"
+        love.graphics.setColor(0.8, 0.86, 0.92, 0.9)
+        love.graphics.print(footer_text, panel_x + panel_width - 16 - love.graphics.getFont():getWidth(footer_text), panel_y + panel_height - 28)
+        love.graphics.setLineWidth(1)
+        love.graphics.setColor(1, 1, 1, 1)
     end
 
     return minigame
