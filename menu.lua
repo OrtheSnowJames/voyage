@@ -148,6 +148,8 @@ end
 function menu.load()
     -- check save file on enter
     check_save_file()
+
+    pixel_sans = love.graphics.newFont("assets/PixelifySans-SemiBold.ttf")
 end
 
 local function handle_quit_button()
@@ -242,13 +244,27 @@ function menu.draw()
     ripples:draw()
     
     -- draw title
-    love.graphics.setColor(1, 1, 1, 1)
     local title = "Voyage"
-    local font = love.graphics.getFont()
-    local title_width = font:getWidth(title)
-    love.graphics.print(title, 
-        size.CANVAS_WIDTH/2 - title_width/2, 
-        50)  -- fixed distance from top
+    local titleScale = 8.0
+
+    local oldFont = love.graphics.getFont()
+    local titleFont = pixel_sans
+    
+    love.graphics.setFont(titleFont)
+    
+    local w = titleFont:getWidth(title) * titleScale
+    local x = size.CANVAS_WIDTH/2 - w/2
+    local y = 24
+    
+    -- shadow
+    love.graphics.setColor(0, 0, 0, 0.4)
+    love.graphics.print(title, x + 4, y + 4, 0, titleScale, titleScale)
+    
+    -- main text
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.print(title, x, y, 0, titleScale, titleScale)
+    
+    love.graphics.setFont(oldFont)
     
     -- draw ui
     suit.draw()

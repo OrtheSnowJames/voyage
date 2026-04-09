@@ -140,13 +140,21 @@ end
 
 function mod_terminal:refresh_listing()
     local files = mods.list_mod_files()
+    local globally_enabled = mods.is_enabled()
     self:push("")
+    self:push(string.format("mods engine: %s", globally_enabled and "enabled" or "disabled"))
     self:push("mods found:")
     if #files == 0 then
         self:push("  (none)")
     else
         for _, file in ipairs(files) do
-            local status = mods.is_file_enabled(file) and "enabled " or "disabled"
+            local file_enabled = mods.is_file_enabled(file)
+            local status
+            if not globally_enabled then
+                status = file_enabled and "enabled (inactive)" or "disabled"
+            else
+                status = file_enabled and "enabled" or "disabled"
+            end
             self:push(string.format("  [%s] %s", status, file))
         end
     end

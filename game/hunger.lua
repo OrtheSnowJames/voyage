@@ -405,20 +405,20 @@ function hunger.draw_hud(state)
         mods_count = tonumber(state.system.mods.count) or 0
     end
 
-    love.graphics.setColor(1, 1, 1, 1)
+    local mods_text
     if mods_count > 0 then
-        love.graphics.print(string.format("Mods: %d", mods_count), 10, 50)
+        mods_text = string.format("Mods: %d", mods_count)
     else
-        local no_mods_text = "no mods"
-        local font = love.graphics.getFont()
-        local text_width = font:getWidth(no_mods_text)
-        local top_offset = top_bar.get_height(state.system.size.CANVAS_HEIGHT)
-        love.graphics.print(
-            no_mods_text,
-            (state.system.size.CANVAS_WIDTH - text_width) / 2,
-            top_offset + 8
-        )
+        mods_text = "no mods"
     end
+
+    love.graphics.setColor(1, 1, 1, 1)
+    local font = love.graphics.getFont()
+    local text_width = font:getWidth(mods_text)
+    local top_top_offset = top_bar.get_height(state.system.size.CANVAS_HEIGHT)
+    local mods_text_loc = {x = (state.system.size.CANVAS_WIDTH - text_width) / 2, y = top_top_offset + 8}
+
+    love.graphics.print(mods_text, mods_text_loc.x, mods_text_loc.y)
 
     if state.system and state.system.serialize and state.system.serialize.was_tampered and state.system.serialize.was_tampered() then
         love.graphics.setColor(1, 0.3, 0.3, 1)

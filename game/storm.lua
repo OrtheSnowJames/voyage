@@ -236,7 +236,7 @@ end
 
 local function is_night(player_ship)
     local hours = get_time_of_day_hours(player_ship)
-    return hours >= 10.5 or hours <= 1.5
+    return hours >= 9.0
 end
 
 function storm.get_spawn_chance(player_y, fishing_level)

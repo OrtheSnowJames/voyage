@@ -29,6 +29,7 @@ local spawn_timer = 0
 local corruption_level = 0
 local pull_radius = 0
 local shop_module_cache = nil
+local dangerous_area_checker_override = nil
 
 local function normalize_angle(angle)
     while angle > math.pi do
@@ -111,6 +112,17 @@ local function is_dangerous_area(y)
     return false
 end
 
+local function resolve_is_dangerous_area(y)
+    if type(dangerous_area_checker_override) == "function" then
+        return dangerous_area_checker_override(y)
+    end
+    local fn = spawnenemy.is_dangerous_area
+    if type(fn) == "function" then
+        return fn(y)
+    end
+    return is_dangerous_area(y)
+end
+
 -- add helper function to calculate enemy speed based on depth
 local function calculate_enemy_speed(y_position, is_dangerous_area)
     local depth_level = math.floor(math.abs(y_position) / FISHING_LEVEL)
@@ -143,7 +155,7 @@ local function build_enemy_spawn(camera, spawn_y, size_source_y, spawn_side)
         direction = -1
     end
 
-    local dangerous = is_dangerous_area(spawn_y)
+    local dangerous = resolve_is_dangerous_area(spawn_y)
     local enemy_speed = calculate_enemy_speed(spawn_y, dangerous)
     local enemy_size_source = tonumber(size_source_y) or spawn_y
     local enemy = {
@@ -168,7 +180,7 @@ function spawnenemy.update(dt, camera, player_x, player_y)
     local view_height = love.graphics.getHeight() / camera.scale
     
     -- check if current area is dangerous
-    local is_dangerous = is_dangerous_area(player_y)
+    local is_dangerous = resolve_is_dangerous_area(player_y)
     
     -- determine spawn interval based on area safety
     local current_spawn_interval = is_dangerous and EXCESSIVE_SPAWN_INTERVAL or ENEMY_SPAWN_INTERVAL
@@ -440,7 +452,7 @@ function spawnenemy.get_enemies()
 end
 
 function spawnenemy.get_spawn_status(player_y)
-    local is_dangerous = is_dangerous_area(player_y)
+    local is_dangerous = resolve_is_dangerous_area(player_y)
     local current_interval = is_dangerous and EXCESSIVE_SPAWN_INTERVAL or ENEMY_SPAWN_INTERVAL
     return {
         is_dangerous = is_dangerous,
@@ -461,6 +473,14 @@ function spawnenemy.set_corruption_state(level, radius)
 end
 
 spawnenemy.is_dangerous_area = is_dangerous_area
+
+function spawnenemy.set_dangerous_area_checker(fn)
+    if type(fn) == "function" then
+        dangerous_area_checker_override = fn
+    else
+        dangerous_area_checker_override = nil
+    end
+end
 
 function spawnenemy.spawn_at_y(camera, spawn_y, size_source_y, spawn_side)
     local y_value = tonumber(spawn_y)

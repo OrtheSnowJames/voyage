@@ -2,6 +2,7 @@ local game = require("game")
 local menu = require("menu")
 local mod_terminal = require("game.mod_terminal")
 local suit = require "SUIT"
+local suit_theme = require("game.suit_theme")
 local size = require("game.size")
 local gamestate = require("game.gamestate")
 local GameType = require("game.gametypes")
@@ -76,6 +77,8 @@ function love.load()
         recreate_canvas(window_width, window_height)
         math.randomseed(os.time())
         default_ui_font = love.graphics.getFont()
+        suit.theme = suit_theme
+        suit.theme.font = default_ui_font
 
         gamestate.set(GameType.MENU)
         launcher = mod_terminal.new({

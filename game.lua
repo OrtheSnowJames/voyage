@@ -408,8 +408,8 @@ local function reset_after_shipwreck_landfall()
     player_ship.caught_fish = {}
     player_ship.men = 1
     player_ship.loyal_men = 1
-    player_ship.fainted_men = 0
-    player_ship.hunger_levels = {}
+    player_ship.fainted_men = 5
+    player_ship.hunger_levels = {60}
     player_ship.hunger_alert_text = ""
     player_ship.hunger_alert_timer = 0
     player_ship.x = kept_x
