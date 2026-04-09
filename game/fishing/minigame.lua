@@ -1,4 +1,5 @@
 local minigame_module = {}
+local extra_math = require("game.extra_math")
 
 function minigame_module.create(deps)
     local fishing = deps.fishing
@@ -24,6 +25,7 @@ function minigame_module.create(deps)
     local CATCH_RANGE = MINIGAME_CONFIG.catch_range or 40
     local PROGRESS_START = MINIGAME_CONFIG.progress_start or 0.5
     local PERFECT_ALIGNMENT_BONUS = MINIGAME_CONFIG.perfect_alignment_bonus or 0.3
+    local PERFECT_HOLD_FOREVER_BONUS = MINIGAME_CONFIG.perfect_hold_forever_bonus or 60
     local NIGHT_FISH_CATCH_DENOMINATOR = MINIGAME_CONFIG.night_fish_catch_denominator or 90
 
     local minigame_state = {
@@ -52,7 +54,11 @@ function minigame_module.create(deps)
         time_in_perfect = 0,
         time_in_catch = 0,
         time_outside_catch = 0,
-        scoring_time = 0
+        scoring_time = 0,
+        entered_catch_circle = false,
+        touched_center_after_entry = false,
+        time_outside_center_after_entry = 0,
+        held_middle_forever = true
     }
 
     local minigame = {}
@@ -67,14 +73,13 @@ function minigame_module.create(deps)
             local upper_half = math.ceil(#pool / 2)
             return pool[math.random(upper_half, #pool)]
         elseif quality_score >= 60 then
-            return pool[math.ceil(#pool / 2)]
+            return pool[1] -- worst fish
         elseif quality_score >= 30 then
-            return pool[math.random(1, math.max(1, math.floor(#pool / 2)))]
+            -- return pool[math.random(1, math.max(1, math.floor(#pool / 2)))]
+            return pool[1]
         else
-            if quality_score < 0 then
-                return "Bluegill"
-            end
-            return pool[math.max(1, math.floor(#pool / 3))]
+            return "Bluegill"
+            -- return pool[math.max(1, math.floor(#pool / 3))]
         end
     end
 
@@ -135,6 +140,14 @@ function minigame_module.create(deps)
         local time_bonus = math.max(0, 80 - minigame_state.scoring_time)
         quality_score = quality_score + time_bonus
         quality_score = quality_score - (minigame_state.touches * 15)
+
+        if minigame_state.entered_catch_circle
+            and minigame_state.touched_center_after_entry
+            and minigame_state.held_middle_forever then
+            quality_score = quality_score + PERFECT_HOLD_FOREVER_BONUS
+            print("held forever!")
+        end
+
         return quality_score
     end
 
@@ -179,6 +192,10 @@ function minigame_module.create(deps)
         minigame_state.time_in_catch = 0
         minigame_state.time_outside_catch = 0
         minigame_state.scoring_time = 0
+        minigame_state.entered_catch_circle = false
+        minigame_state.touched_center_after_entry = false
+        minigame_state.time_outside_center_after_entry = 0
+        minigame_state.held_middle_forever = true
     end
 
     function minigame.update(dt)
@@ -201,7 +218,7 @@ function minigame_module.create(deps)
 
         local dx = mouse_x - center_x
         local dy = mouse_y - center_y
-        minigame_state.mouse_angle = math.atan2(dy, dx)
+        minigame_state.mouse_angle = extra_math.atan2(dy, dx)
         minigame_state.mouse_radius = math.sqrt(dx * dx + dy * dy)
 
         local max_movement = 30
@@ -232,12 +249,34 @@ function minigame_module.create(deps)
 
         local distance_to_fish = math.abs(minigame_state.rod_position - minigame_state.fish_position)
         local is_near_fish = distance_to_fish <= CATCH_RANGE
+        local is_in_middle = distance_to_fish <= 5
+
+        if is_near_fish and not minigame_state.entered_catch_circle then
+            minigame_state.entered_catch_circle = true
+        end
+
+        if minigame_state.entered_catch_circle and not minigame_state.touched_center_after_entry and not is_in_middle then
+            minigame_state.time_outside_center_after_entry = minigame_state.time_outside_center_after_entry + dt
+            if minigame_state.time_outside_center_after_entry > 2.0 then
+                minigame_state.held_middle_forever = false
+            end
+        end
+
+        if minigame_state.entered_catch_circle
+            and not minigame_state.touched_center_after_entry
+            and is_in_middle then
+            minigame_state.touched_center_after_entry = true
+        end
+
+        if minigame_state.touched_center_after_entry and not is_in_middle then
+            minigame_state.held_middle_forever = false
+        end
 
         if is_near_fish then
             minigame_state.scoring_time = minigame_state.scoring_time + dt
             local accuracy_multiplier = 1.0
 
-            if distance_to_fish <= 5 then
+            if is_in_middle then
                 accuracy_multiplier = 1.0 + PERFECT_ALIGNMENT_BONUS
                 minigame_state.time_in_perfect = minigame_state.time_in_perfect + dt
             elseif distance_to_fish <= 40 then

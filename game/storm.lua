@@ -19,9 +19,14 @@ local RAIN_AUDIO_PATH = "assets/rain.ogg"
 local LIGHTNING_AUDIO_PATH = "assets/lightning_strike.ogg"
 
 local audio_loaded = false
+local audio_enabled = true
 local rain_source = nil
 local lightning_source = nil
 local audio_volume_multiplier = 1.0
+
+local function is_web_runtime()
+    return love.system and love.system.getOS and love.system.getOS() == "Web"
+end
 
 local function apply_rain_volume()
     if rain_source then
@@ -39,7 +44,51 @@ local function random_in_circle(point, radius)
     }
 end
 
+local function is_finite_number(value)
+    return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
+end
+
+local function valid_point(p)
+    return p and is_finite_number(p.x) and is_finite_number(p.y)
+end
+
+local function safe_ellipse_fill(x, y, rx, ry)
+    if love.graphics.ellipse then
+        love.graphics.ellipse("fill", x, y, rx, ry)
+        return
+    end
+    -- Fallback for runtimes missing ellipse: approximate with a circle.
+    local r = math.max(1, tonumber(rx) or 1, tonumber(ry) or 1)
+    if love.graphics.circle then
+        love.graphics.circle("fill", x, y, r)
+    end
+end
+
+local function safe_polygon_fill(points)
+    if love.graphics.polygon then
+        love.graphics.polygon("fill", unpack(points))
+        return true
+    end
+
+    -- Fallback for runtimes missing polygon: outline only.
+    if love.graphics.line then
+        love.graphics.line(unpack(points))
+        return true
+    end
+    return false
+end
+
 local function ensure_audio_loaded()
+    if is_web_runtime() then
+        audio_enabled = false
+        audio_loaded = true
+        return
+    end
+
+    if not audio_enabled then
+        return
+    end
+
     if audio_loaded then
         return
     end
@@ -50,16 +99,28 @@ local function ensure_audio_loaded()
         rain:setLooping(true)
         rain_source = rain
         apply_rain_volume()
+    else
+        audio_enabled = false
+        rain_source = nil
+        lightning_source = nil
+        return
     end
 
     local ok_lightning, lightning = pcall(love.audio.newSource, LIGHTNING_AUDIO_PATH, "static")
     if ok_lightning and lightning then
         lightning:setVolume(0.25)
         lightning_source = lightning
+    else
+        audio_enabled = false
+        rain_source = nil
+        lightning_source = nil
     end
 end
 
 local function play_rain_loop()
+    if not audio_enabled or is_web_runtime() then
+        return
+    end
     ensure_audio_loaded()
     apply_rain_volume()
     if rain_source and not rain_source:isPlaying() then
@@ -68,12 +129,18 @@ local function play_rain_loop()
 end
 
 local function stop_rain_loop()
+    if not audio_enabled then
+        return
+    end
     if rain_source and rain_source:isPlaying() then
         rain_source:stop()
     end
 end
 
 local function play_lightning_sound(strike_x, strike_y, player)
+    if not audio_enabled or is_web_runtime() then
+        return
+    end
     ensure_audio_loaded()
     if not lightning_source then
         return
@@ -110,8 +177,8 @@ local function pick_strike_point_around_player(player)
     -- Heavy bias toward player: some direct hits, many nearby, some far.
     if roll < 0.25 then
         return {
-            x = center.x + love.math.random(-10, 10),
-            y = center.y + love.math.random(-10, 10)
+            x = center.x + math.random(-10, 10),
+            y = center.y + math.random(-10, 10)
         }
     end
     if roll < 0.70 then
@@ -153,28 +220,33 @@ local function build_lightning_track(top_point, bottom_point)
 end
 
 local function draw_lightning_track(track, track_thickness)
+    if type(track) ~= "table" or #track < 2 then
+        return
+    end
+
     local prev_r, prev_g, prev_b, prev_a = love.graphics.getColor()
     love.graphics.setColor(1, 1, 1, 1)
 
     for i = 1, #track - 1 do
         local p1 = track[i]
         local p2 = track[i + 1]
-        local dx = p2.x - p1.x
-        local dy = p2.y - p1.y
+        if valid_point(p1) and valid_point(p2) then
+            local dx = p2.x - p1.x
+            local dy = p2.y - p1.y
         local len = math.sqrt((dx * dx) + (dy * dy))
-        if len > 0.0001 then
-            local nx = -dy / len
-            local ny = dx / len
-            local h1 = (track_thickness[i] or 10) * 0.5
-            local h2 = (track_thickness[i + 1] or 10) * 0.5
+            if len > 0.0001 then
+                local nx = -dy / len
+                local ny = dx / len
+                local h1 = (track_thickness[i] or 10) * 0.5
+                local h2 = (track_thickness[i + 1] or 10) * 0.5
 
-            love.graphics.polygon(
-                "fill",
-                p1.x + nx * h1, p1.y + ny * h1,
-                p1.x - nx * h1, p1.y - ny * h1,
-                p2.x - nx * h2, p2.y - ny * h2,
-                p2.x + nx * h2, p2.y + ny * h2
-            )
+                safe_polygon_fill({
+                    p1.x + nx * h1, p1.y + ny * h1,
+                    p1.x - nx * h1, p1.y - ny * h1,
+                    p2.x - nx * h2, p2.y - ny * h2,
+                    p2.x + nx * h2, p2.y + ny * h2
+                })
+            end
         end
     end
 
@@ -202,6 +274,9 @@ function storm.water_intense(state, yes)
 end
 
 function storm.draw_lightning_dot(dot)
+    if not valid_point(dot) then
+        return
+    end
     if dot.stage == 3 then
         love.graphics.setColor(1.000, 0.082, 0.000)
     elseif dot.stage == 2 then
@@ -210,7 +285,7 @@ function storm.draw_lightning_dot(dot)
         love.graphics.setColor(1.000, 0.976, 0.812)
     end
 
-    love.graphics.ellipse("fill", dot.x, dot.y, DOT_SIZE, DOT_SIZE / 1.25)
+    safe_ellipse_fill(dot.x, dot.y, DOT_SIZE, DOT_SIZE / 1.25)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -277,7 +352,9 @@ end
 
 function storm.set_audio_volume_multiplier(mult)
     audio_volume_multiplier = math.max(0, math.min(1, tonumber(mult) or 1))
-    apply_rain_volume()
+    if audio_enabled then
+        apply_rain_volume()
+    end
 end
 
 function storm.force_stop(state)
@@ -309,7 +386,7 @@ function storm.update(state, dt)
 
     runtime.next_bolt_timer = runtime.next_bolt_timer - dt
     if runtime.next_bolt_timer <= 0 then
-        local burst_count = love.math.random(BOLT_BURST_MIN, BOLT_BURST_MAX)
+        local burst_count = math.random(BOLT_BURST_MIN, BOLT_BURST_MAX)
         for _ = 1, burst_count do
             local strike_point = pick_strike_point_around_player(player)
             table.insert(runtime.pending_dots, {
@@ -335,7 +412,7 @@ function storm.update(state, dt)
 
         if progress >= 1.0 then
             local top_point = {
-                x = dot.x + love.math.random(-35, 35),
+                x = dot.x + math.random(-35, 35),
                 y = camera.y - 80
             }
             local bottom_point = {
@@ -406,7 +483,9 @@ function storm.draw(state)
     end
     for i = 1, #runtime.active_bolts do
         local bolt = runtime.active_bolts[i]
-        draw_lightning_track(bolt.track, bolt.thickness)
+        if bolt and type(bolt.track) == "table" and type(bolt.thickness) == "table" then
+            draw_lightning_track(bolt.track, bolt.thickness)
+        end
     end
 end
 

@@ -337,6 +337,17 @@ function update_steps.fishing_minigame_state(dt, state)
     state.fishing.runtime.set_fishing_cooldown(state.fishing.config.fishing_cooldown)
 end
 
+local function determine_casualties_to_loyal(casualties, state)
+    local player_ship = state.system.player
+    local unloyal_men = player_ship.men - player_ship.loyal_men
+
+    if casualties <= unloyal_men then
+        return 0 -- no casualties to loyal men
+    else
+        return player_ship.loyal_men - (casualties - unloyal_men)
+    end
+end
+
 function update_steps.combat_state(dt, state)
     local gamestate = state.system.gamestate
     local GameType = state.system.gametype
@@ -371,6 +382,7 @@ function update_steps.combat_state(dt, state)
 
             if result.victory then
                 player_ship.men = player_ship.men - result.casualties
+                player_ship.loyal_men = player_ship.loyal_men - determine_casualties_to_loyal(result.casualties, state)
                 local open_slots = math.max(0, RECOVERY_BAY_MAX - player_ship.fainted_men)
                 local stored_fainted = math.min(open_slots, result.fainted)
                 local overflow_fainted = math.max(0, result.fainted - stored_fainted)

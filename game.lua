@@ -760,7 +760,8 @@ function game.load()
     local saved_data = serialize.load_data({
         allow_tampered = true
     })
-    if serialize.was_tampered() then
+    local tampered_this_load = serialize.was_tampered()
+    if tampered_this_load then
         print("Tampered save.lua detected: loading anyway.")
     end
 
@@ -849,6 +850,12 @@ function game.load()
         player_ship.dock_walk_max_side = nil
         player_ship.dock_walk_max_up = nil
         player_ship.dock_walk_max_down = nil
+    end
+
+    local tampered_already_saved = player_ship.save_file_tampered == true
+    player_ship.save_file_tampered = tampered_already_saved or tampered_this_load
+    if tampered_this_load and not tampered_already_saved then
+        serialize.save_data(game.get_saveable_data())
     end
 
     if state.fishing.runtime then
@@ -998,7 +1005,11 @@ end
 function game.toggleDebug()
     debugOptions.showDebugButtons = not debugOptions.showDebugButtons
     if debugOptions.showDebugButtons then
+        local was_already_opened = player_ship.debug_menu_opened == true
         player_ship.debug_menu_opened = true
+        if not was_already_opened then
+            serialize.save_data(game.get_saveable_data())
+        end
     end
     print("Debug mode: " .. (debugOptions.showDebugButtons and "ON" or "OFF"))
 end

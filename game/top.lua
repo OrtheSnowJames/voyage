@@ -9,6 +9,10 @@ local food_icon = nil
 local food_icon_load_attempted = false
 local top_font = nil
 local top_font_load_attempted = false
+local grain_shader = nil
+local grain_shader_load_attempted = false
+local grain_last_second = -1
+local grain_section_seeds = {0.11, 0.37, 0.73}
 
 local constants = require("game.constants")
 
@@ -22,6 +26,64 @@ local function get_radius(radius_fn, role, default_radius, angle)
         return radius_fn
     end
     return default_radius
+end
+
+local grain_shader_raw = [[
+extern number time;
+extern number seed;
+
+number random(vec2 st) {
+    return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+}
+
+number blockRandom(vec2 st, number blockSize) {
+    vec2 blockPos = floor(st / blockSize);
+    return random(blockPos + vec2(seed * 100.0 + floor(time), seed * 31.0));
+}
+
+vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
+    vec4 texelColor = Texel(texture, texture_coords) * color;
+    number blockSize = 16.0;
+    number noise = blockRandom(screen_coords, blockSize);
+    number grain = (noise - 0.5) * 0.3;
+    number luminance = dot(texelColor.rgb, vec3(0.299, 0.587, 0.114));
+
+    vec3 grainedColor;
+    if (luminance < 0.05) {
+        grainedColor = texelColor.rgb + abs(grain);
+    } else {
+        grainedColor = texelColor.rgb + grain;
+    }
+
+    grainedColor = clamp(grainedColor, 0.0, 1.0);
+    return vec4(grainedColor, texelColor.a);
+}
+]]
+
+local function get_grain_shader()
+    if grain_shader_load_attempted then
+        return grain_shader
+    end
+    grain_shader_load_attempted = true
+    local ok, shader_or_err = pcall(love.graphics.newShader, grain_shader_raw)
+    if ok then
+        grain_shader = shader_or_err
+    else
+        print("top grain shader failed: " .. tostring(shader_or_err))
+        grain_shader = nil
+    end
+    return grain_shader
+end
+
+local function update_grain_seeds_per_second()
+    local now_second = math.floor(love.timer.getTime())
+    if now_second == grain_last_second then
+        return
+    end
+    grain_last_second = now_second
+    for i = 1, #grain_section_seeds do
+        grain_section_seeds[i] = love.math.random()
+    end
 end
 
 -- Draw an analog clock.
@@ -162,14 +224,29 @@ function top.draw(state)
 
     local width = love.graphics.getWidth()
     local height = top.get_height(love.graphics.getHeight())
+    local dv = width / 3
 
-    love.graphics.setColor(0.851, 0.851, 0.851, 0.5)
-    love.graphics.rectangle("fill", start_x, start_y, width, height)
+    local section_shader = get_grain_shader()
+    update_grain_seeds_per_second()
+
+    if section_shader then
+        love.graphics.setShader(section_shader)
+        for i = 1, 3 do
+            local section_x = start_x + ((i - 1) * dv)
+            section_shader:send("time", love.timer.getTime())
+            section_shader:send("seed", grain_section_seeds[i] or 0)
+            love.graphics.setColor(0.851, 0.851, 0.851, 0.5)
+            love.graphics.rectangle("fill", section_x, start_y, dv, height)
+        end
+        love.graphics.setShader()
+    else
+        love.graphics.setColor(0.851, 0.851, 0.851, 0.5)
+        love.graphics.rectangle("fill", start_x, start_y, width, height)
+    end
 
     love.graphics.setColor(0.95, 0.95, 0.95)
     love.graphics.line(start_x, height, width, height)
 
-    local dv = width / 3
     for i = 1, width / dv do
         local dw = dv * i
         love.graphics.line(dw, start_y, dw, height)

@@ -39,6 +39,16 @@ function extra_math.turn_towards(current, target, max_delta)
     return current - max_delta
 end
 
+function extra_math.atan2(y, x)
+    if x > 0 then return math.atan(y / x)
+    elseif x < 0 and y >= 0 then return math.atan(y / x) + math.pi
+    elseif x < 0 and y < 0 then return math.atan(y / x) - math.pi
+    elseif x == 0 and y > 0 then return math.pi / 2
+    elseif x == 0 and y < 0 then return -math.pi / 2
+    else return 0 -- Undefined, or x=0 and y=0
+    end
+end
+
 local curve = {}
 
 -- normalize time → 0..1

@@ -400,32 +400,49 @@ function hunger.draw_hud(state)
     local hunger_config = state.constants.hunger
     sync_hunger_levels(player_ship, hunger_config)
 
-    local mods_count = 0
-    if state.system.mods then
-        mods_count = tonumber(state.system.mods.count) or 0
-    end
+    if state.system.gamestate.get() ~= state.system.gametype.FISHING then -- don't display while fishing
+        local mods_count = 0
+        if state.system.mods then
+            mods_count = tonumber(state.system.mods.count) or 0
+        end
 
-    local mods_text
-    if mods_count > 0 then
-        mods_text = string.format("Mods: %d", mods_count)
-    else
-        mods_text = "no mods"
-    end
+        local mods_text
+        if mods_count > 0 then
+            mods_text = string.format("Mods: %d", mods_count)
+        else
+            mods_text = "no mods"
+        end
 
-    love.graphics.setColor(1, 1, 1, 1)
-    local font = love.graphics.getFont()
-    local text_width = font:getWidth(mods_text)
-    local top_top_offset = top_bar.get_height(state.system.size.CANVAS_HEIGHT)
-    local mods_text_loc = {x = (state.system.size.CANVAS_WIDTH - text_width) / 2, y = top_top_offset + 8}
-
-    love.graphics.print(mods_text, mods_text_loc.x, mods_text_loc.y)
-
-    if state.system and state.system.serialize and state.system.serialize.was_tampered and state.system.serialize.was_tampered() then
-        love.graphics.setColor(1, 0.3, 0.3, 1)
-        love.graphics.print("Save file tampered", 10, 70)
         love.graphics.setColor(1, 1, 1, 1)
-    end
+        local font = love.graphics.getFont()
+        local text_width = font:getWidth(mods_text)
+        local top_top_offset = top_bar.get_height(state.system.size.CANVAS_HEIGHT)
+        local mods_text_loc = {x = (state.system.size.CANVAS_WIDTH - text_width) / 2, y = top_top_offset + 8}
 
+        love.graphics.print(mods_text, mods_text_loc.x, mods_text_loc.y)
+
+        local status_y = mods_text_loc.y + font:getHeight() + 4
+        local save_file_tampered = player_ship and player_ship.save_file_tampered == true
+        if save_file_tampered then
+            local tampered_text = "Save file tampered"
+            local tampered_text_width = font:getWidth(tampered_text)
+            local tampered_x = (state.system.size.CANVAS_WIDTH - tampered_text_width) / 2
+            love.graphics.setColor(1, 0.3, 0.3, 1)
+            love.graphics.print(tampered_text, tampered_x, status_y)
+            status_y = status_y + font:getHeight() + 2
+            love.graphics.setColor(1, 1, 1, 1)
+        end
+
+        local debug_menu_opened = player_ship and player_ship.debug_menu_opened == true
+        if debug_menu_opened then
+            local debug_text = "Debug menu opened"
+            local debug_text_width = font:getWidth(debug_text)
+            local debug_x = (state.system.size.CANVAS_WIDTH - debug_text_width) / 2
+            love.graphics.setColor(1, 0.85, 0.2, 1)
+            love.graphics.print(debug_text, debug_x, status_y)
+            love.graphics.setColor(1, 1, 1, 1)
+        end
+    end
 end
 
 return hunger
