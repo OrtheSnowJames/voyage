@@ -99,7 +99,8 @@ local constants = {
     time = {
         day_length = 12 * 60,
         sleep_duration = 10,
-        fade_duration = 2
+        fade_duration = 2,
+        morningtext_fade_duration = 2
     },
     world = {
         shore_division = 60,

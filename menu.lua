@@ -2,7 +2,9 @@ local menu = {}
 local suit = require "SUIT"
 local serialize = require("game.serialize")
 local size = require("game.size")
+local extra_math = require("game.extra_math")
 local WEB_QUIT_REDIRECT_URL = "http://waffledogz.us"
+local lerp = extra_math.lerp
 
 local state = {
     ship_name = {text = ""},  -- initialize with text property for suit input
@@ -19,11 +21,6 @@ local waterColors = {
     dusk  = {0.12, 0.08, 0.25},  -- deeper blue with purple hint (11:00)
     night = {0.01, 0.02, 0.08}   -- very dark blue (12:00)
 }
-
--- linear interpolation helper function
-local function lerp(a, b, t)
-    return a + (b - a) * t
-end
 
 -- function to get current water color based on time
 local function getCurrentWaterColor()

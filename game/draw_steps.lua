@@ -607,14 +607,6 @@ function draw_steps.draw_post_world_overlays(state)
     if time_system.is_fading or time_system.fade_alpha > 0 then
         love.graphics.setColor(0, 0, 0, time_system.fade_alpha)
         love.graphics.rectangle("fill", 0, 0, size.CANVAS_WIDTH, size.CANVAS_HEIGHT)
-
-        if time_system.is_sleeping and time_system.fade_alpha > 0.9 then
-            love.graphics.setColor(1, 1, 1, 1)
-            local sleep_text = "Sleeping..."
-            local font = love.graphics.getFont()
-            local text_width = font:getWidth(sleep_text)
-            love.graphics.print(sleep_text, (size.CANVAS_WIDTH - text_width) / 2, size.CANVAS_HEIGHT / 2)
-        end
     end
 
     if current_state == GameType.FISHING then
@@ -830,6 +822,7 @@ function draw_steps.draw_final_ui(state)
     local combat_state = state.combat.state.combat
     local in_shop = state.system.gamestate.get():find("shop", 1, true)
     local crew_panel_open = crew_management.is_open and crew_management.is_open()
+    local time_system = state.system.player.time_system
     if combat_state.defeat_flash and combat_state.defeat_flash.active then
         love.graphics.setColor(1, 1, 1, combat_state.defeat_flash.alpha)
         love.graphics.rectangle("fill", 0, 0, state.system.size.CANVAS_WIDTH, state.system.size.CANVAS_HEIGHT)
@@ -841,6 +834,18 @@ function draw_steps.draw_final_ui(state)
 
     love.graphics.setColor(1, 1, 1, 1)
     state.system.ui.suit.draw()
+
+    if time_system.is_sleeping and time_system.fade_alpha > 0.9 then
+        love.graphics.setColor(1, 1, 1, 1)
+        local sleep_text = "Sleeping..."
+        local font = love.graphics.getFont()
+        local text_width = font:getWidth(sleep_text)
+        love.graphics.print(
+            sleep_text,
+            (state.system.size.CANVAS_WIDTH - text_width) / 2,
+            state.system.size.CANVAS_HEIGHT / 2
+        )
+    end
 end
 
 function draw_steps.draw_special_event_overlay(state)

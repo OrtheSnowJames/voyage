@@ -1,5 +1,8 @@
 local morningtext = {}
 local size = require("game.size")
+local constants = require("game.constants")
+local extra_math = require("game.extra_math")
+local round_to_tenth = extra_math.round_to_tenth
 
 local morning_texts = {
     {"The water is blue this morning.", "Nice day for fishing."},
@@ -133,7 +136,7 @@ local corrupted_texts = {
 local TYPEWRITER_CHARS_PER_SECOND = 26
 local START_DELAY = 2.0
 local HOLD_TIME = 5.0
-local FADE_DURATION = 1.2
+local FADE_DURATION = constants.time.morningtext_fade_duration
 local MARGIN = 20
 local LINE_SPACING = 8
 local TEXT_SCALE = 1.6
@@ -147,10 +150,6 @@ local state = {
     last_time_hours = nil,
     night_triggered_today = false
 }
-
-local function round_to_tenth(value)
-    return math.floor(value * 10 + 0.5) / 10
-end
 
 local function get_corrupted_lines(rainbows)
     local key = round_to_tenth(math.max(0, tonumber(rainbows) or 0))

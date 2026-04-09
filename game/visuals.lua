@@ -1,8 +1,6 @@
 local visuals = {}
-
-local function lerp(a, b, t)
-    return a + (b - a) * t
-end
+local extra_math = require("game.extra_math")
+local lerp = extra_math.lerp
 
 local water_colors = {
     dawn  = {0.15, 0.2, 0.35},

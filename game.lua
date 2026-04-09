@@ -17,6 +17,7 @@ local visuals = require("game.visuals")
 local ripple_steps = require("game.ripple_steps")
 local movement_steps = require("game.movement_steps")
 local mobile_controls_steps = require("game.mobile_controls_steps")
+local extra_math = require("game.extra_math")
 local update_steps = require("game.update_steps")
 local draw_steps = require("game.draw_steps")
 local shopkeeper_factory = require("game.shopkeeper")
@@ -26,6 +27,7 @@ local mods = require("game.mods")
 local hunger = require("game.hunger")
 local crew_management = require("game.crew_management")
 local alert = require("game.alert")
+local wake_up = require("game.wake_up")
 local FISHING_LEVEL = constants.fishing_level
 local fishing_minigame = fishing.minigame
 
@@ -78,6 +80,7 @@ state.system = {
     draw_steps = draw_steps,
     movement_steps = movement_steps,
     mobile_controls_steps = mobile_controls_steps,
+    extra_math = extra_math,
     ripple_steps = ripple_steps,
     shaders = shader_factory,
     shopkeeper = shopkeeper_factory,
@@ -97,6 +100,7 @@ state.system = {
         draw_steps = draw_steps,
         movement_steps = movement_steps,
         mobile_controls_steps = mobile_controls_steps,
+        extra_math = extra_math,
         ripple_steps = ripple_steps,
         shaders = shader_factory,
         shopkeeper = shopkeeper_factory,
@@ -137,7 +141,8 @@ state.ui = {
     mobile = mobile_controls,
     suit = suit,
     morningtext = morningtext,
-    alert = alert
+    alert = alert,
+    wake_up = wake_up
 }
 state.actions = {}
 state.mods = {
@@ -161,6 +166,7 @@ state.system.shop_state = state.shop
 state.system.mods_state = state.mods
 state.system.mods_module = mods
 state.system.mods = state.mods
+state.system.extra_math = extra_math
 
 -- derived settings (automatically update when config changes)
 local function get_max_catch_texts()
@@ -743,6 +749,8 @@ function game.load()
     mobile_controls.enabled = on_mobile
 
     mods.load_all(state)
+    wake_up.load()
+    wake_up.stop()
     state.mods.count = mods.count()
     state.mods.active = state.mods.count > 0
     if state.mods.active then
@@ -1089,6 +1097,7 @@ function game.update(dt)
     morningtext.observe_time(get_time_of_day_hours())
     morningtext.update(dt)
     alert.update(dt)
+    wake_up.update(dt)
     detect_cheating()
     update_steps.sleep_fade_state(dt, state)
 
@@ -1134,6 +1143,7 @@ function game.draw()
     draw_steps.draw_final_ui(state)
     draw_steps.draw_special_event_overlay(state)
     mods.run_hook("on_draw", state)
+    wake_up.draw()
 end
 
 -- make player_ship accessible to other modules

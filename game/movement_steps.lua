@@ -1,4 +1,6 @@
 local movement_steps = {}
+local extra_math = require("game.extra_math")
+local clamp = extra_math.clamp
 
 local control_corruption = {
     timer = 0,
@@ -12,16 +14,6 @@ local function refresh_control_corruption(strength)
     control_corruption.turn_jitter = (love.math.random() * 2 - 1) * 0.9 * strength
     control_corruption.drift_x = (love.math.random() * 2 - 1) * 28 * strength
     control_corruption.drift_y = (love.math.random() * 2 - 1) * 22 * strength
-end
-
-local function clamp(v, lo, hi)
-    if v < lo then
-        return lo
-    end
-    if v > hi then
-        return hi
-    end
-    return v
 end
 
 local function clamp_to_rect(px, py, rx, ry, rw, rh)

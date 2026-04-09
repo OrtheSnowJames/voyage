@@ -1,6 +1,7 @@
 local spawnenemy = {}
 local size = require("game.size")
 local constants = require("game.constants")
+local extra_math = require("game.extra_math")
 local FISHING_LEVEL = constants.fishing_level
 local DANGEROUS_AREA_BUFFER = constants.combat.dangerous_area_buffer
 
@@ -31,26 +32,8 @@ local pull_radius = 0
 local shop_module_cache = nil
 local dangerous_area_checker_override = nil
 
-local function normalize_angle(angle)
-    while angle > math.pi do
-        angle = angle - 2 * math.pi
-    end
-    while angle < -math.pi do
-        angle = angle + 2 * math.pi
-    end
-    return angle
-end
-
-local function turn_towards(current, target, max_delta)
-    local delta = normalize_angle(target - current)
-    if math.abs(delta) <= max_delta then
-        return target
-    end
-    if delta > 0 then
-        return current + max_delta
-    end
-    return current - max_delta
-end
+local normalize_angle = extra_math.normalize_angle
+local turn_towards = extra_math.turn_towards
 
 -- generate a random enemy size (crew count)
 local function generate_enemy_size(player_y)

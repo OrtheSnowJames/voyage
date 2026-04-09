@@ -1,5 +1,7 @@
 local mods = require("game.mods")
 local scrolling = require("game.scrolling")
+local extra_math = require("game.extra_math")
+local clamp = extra_math.clamp
 
 local mod_terminal = {}
 mod_terminal.__index = mod_terminal
@@ -38,16 +40,6 @@ local function get_scanline_shader()
     end
 
     return scanline_shader
-end
-
-local function clamp(value, min_value, max_value)
-    if value < min_value then
-        return min_value
-    end
-    if value > max_value then
-        return max_value
-    end
-    return value
 end
 
 local function autocomplete(input, commands)

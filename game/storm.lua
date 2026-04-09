@@ -15,8 +15,8 @@ local MAX_DEPTH_FOR_CHANCE = 12
 local LIGHTNING_HEARING_RADIUS = 1200
 local INITIAL_LIGHTNING_VOLUME = 0.1 -- 0.5 = 50%
 local BASE_RAIN_VOLUME = 0.38
-local RAIN_AUDIO_PATH = "assets/rain.mp3"
-local LIGHTNING_AUDIO_PATH = "assets/lightning_strike.mp3"
+local RAIN_AUDIO_PATH = "assets/rain.ogg"
+local LIGHTNING_AUDIO_PATH = "assets/lightning_strike.ogg"
 
 local audio_loaded = false
 local rain_source = nil

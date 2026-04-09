@@ -119,18 +119,16 @@ function update_steps.sleep_fade_state(dt, state)
             elseif time_system.fade_direction == "wait" then
                 time_system.sleep_timer = time_system.sleep_timer + dt
                 if time_system.sleep_timer >= time_system.SLEEP_DURATION then
-                    time_system.fade_direction = "in"
-                    time_system.fade_timer = 0
-                end
-            elseif time_system.fade_direction == "in" then
-                time_system.fade_alpha = math.max(0, 1 - (time_system.fade_timer / time_system.FADE_DURATION))
-
-                if time_system.fade_timer >= time_system.FADE_DURATION then
                     time_system.is_fading = false
                     time_system.is_sleeping = false
                     time_system.fade_alpha = 0
+                    time_system.fade_direction = "in"
+                    time_system.fade_timer = 0
                     gamestate.set(GameType.VOYAGE)
                     state.system.ui.morningtext.start(player_ship.rainbows)
+                    if state.system.ui.wake_up and state.system.ui.wake_up.start then
+                        state.system.ui.wake_up.start()
+                    end
 
                     player_ship.name = state.system.menu.get_name()
                     state.system.serialize.save_data(state.system.game.get_saveable_data())

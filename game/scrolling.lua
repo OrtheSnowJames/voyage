@@ -1,4 +1,6 @@
 local scrolling = {}
+local extra_math = require("game.extra_math")
+local clamp = extra_math.clamp
 
 local unpack_fn = table.unpack or unpack
 
@@ -14,16 +16,6 @@ local defaults = {
     thumb_drag_color = {0.95, 0.95, 0.98, 0.95},
     track_border_color = {1, 1, 1, 0.15}
 }
-
-local function clamp(value, min_value, max_value)
-    if value < min_value then
-        return min_value
-    end
-    if value > max_value then
-        return max_value
-    end
-    return value
-end
 
 local function point_in_rect(x, y, rect)
     return x >= rect.x and y >= rect.y and x <= (rect.x + rect.w) and y <= (rect.y + rect.h)
