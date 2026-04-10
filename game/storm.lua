@@ -11,6 +11,8 @@ local BOLT_BURST_MIN = 2
 local BOLT_BURST_MAX = 4
 local STRIKE_RADIUS_MIN = 260
 local STRIKE_RADIUS_MAX = 560
+local ISLAND_STRIKE_BLOCK_RADIUS = 74
+local DOCK_STRIKE_BLOCK_RADIUS = 88
 local MAX_DEPTH_FOR_CHANCE = 12
 local LIGHTNING_HEARING_RADIUS = 1200
 local INITIAL_LIGHTNING_VOLUME = 0.1 -- 0.5 = 50%
@@ -170,21 +172,111 @@ local function random_ring_point(center, min_radius, max_radius)
     }
 end
 
-local function pick_strike_point_around_player(player)
-    local center = {x = player.x, y = player.y}
-    local roll = math.random()
+local function dist_sq(ax, ay, bx, by)
+    local dx = (ax or 0) - (bx or 0)
+    local dy = (ay or 0) - (by or 0)
+    return (dx * dx) + (dy * dy)
+end
 
-    -- Heavy bias toward player: some direct hits, many nearby, some far.
-    if roll < 0.25 then
-        return {
-            x = center.x + math.random(-10, 10),
-            y = center.y + math.random(-10, 10)
-        }
+local function point_near_island_or_dock(state, x, y)
+    if not state or not state.shop then
+        return false
     end
-    if roll < 0.70 then
-        return random_ring_point(center, 70, 220)
+
+    local shop_state = state.shop
+    local shop_module = shop_state.module
+    local keeper = shop_state.keeper
+
+    if keeper and is_finite_number(keeper.x) and is_finite_number(keeper.y) then
+        if dist_sq(x, y, keeper.x, keeper.y) <= (ISLAND_STRIKE_BLOCK_RADIUS * ISLAND_STRIKE_BLOCK_RADIUS) then
+            return true
+        end
     end
-    return random_ring_point(center, STRIKE_RADIUS_MIN, STRIKE_RADIUS_MAX)
+
+    if shop_module and shop_module.get_main_dock_position and keeper then
+        local dock_x, dock_y = shop_module.get_main_dock_position(keeper)
+        if is_finite_number(dock_x) and is_finite_number(dock_y) then
+            if dist_sq(x, y, dock_x, dock_y) <= (DOCK_STRIKE_BLOCK_RADIUS * DOCK_STRIKE_BLOCK_RADIUS) then
+                return true
+            end
+        end
+    end
+
+    local port_a_shops = shop_state.port_a_shops or {}
+    for _, shop_data in ipairs(port_a_shops) do
+        if shop_data and shop_data.is_spawned then
+            local island_center_x = tonumber(shop_data.x)
+            local island_center_y = (tonumber(shop_data.y) or 0) + 24
+            if is_finite_number(island_center_x) and is_finite_number(island_center_y) then
+                if dist_sq(x, y, island_center_x, island_center_y) <= (ISLAND_STRIKE_BLOCK_RADIUS * ISLAND_STRIKE_BLOCK_RADIUS) then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+local function pick_strike_point_around_player(player, state)
+    local center = {x = player.x, y = player.y}
+    for _ = 1, 16 do
+        local roll = math.random()
+        local candidate
+
+        -- Heavy bias toward player: some direct hits, many nearby, some far.
+        if roll < 0.25 then
+            candidate = {
+                x = center.x + math.random(-10, 10),
+                y = center.y + math.random(-10, 10)
+            }
+        elseif roll < 0.70 then
+            candidate = random_ring_point(center, 70, 220)
+        else
+            candidate = random_ring_point(center, STRIKE_RADIUS_MIN, STRIKE_RADIUS_MAX)
+        end
+
+        if not point_near_island_or_dock(state, candidate.x, candidate.y) then
+            return candidate
+        end
+    end
+
+    -- Fallback: keep trying farther placements before giving up.
+    for _ = 1, 24 do
+        local fallback = random_ring_point(center, STRIKE_RADIUS_MAX, STRIKE_RADIUS_MAX + 260)
+        if not point_near_island_or_dock(state, fallback.x, fallback.y) then
+            return fallback
+        end
+    end
+
+    return random_ring_point(center, STRIKE_RADIUS_MAX, STRIKE_RADIUS_MAX + 260)
+end
+
+local function player_docked_or_on_land(state, player)
+    if not player then
+        return false
+    end
+    if player.is_on_foot then
+        return true
+    end
+    if not state or not state.shop then
+        return false
+    end
+
+    local shop_module = state.shop.module
+    if not shop_module then
+        return false
+    end
+
+    local keeper = state.shop.keeper
+    if shop_module.can_disembark_main_dock and shop_module.can_disembark_main_dock(player, keeper) then
+        return true
+    end
+    if shop_module.can_disembark_port_shop and shop_module.can_disembark_port_shop(player) then
+        return true
+    end
+
+    return false
 end
 
 local function build_lightning_track(top_point, bottom_point)
@@ -388,7 +480,7 @@ function storm.update(state, dt)
     if runtime.next_bolt_timer <= 0 then
         local burst_count = math.random(BOLT_BURST_MIN, BOLT_BURST_MAX)
         for _ = 1, burst_count do
-            local strike_point = pick_strike_point_around_player(player)
+            local strike_point = pick_strike_point_around_player(player, state)
             table.insert(runtime.pending_dots, {
                 x = strike_point.x,
                 y = strike_point.y,
@@ -433,34 +525,36 @@ function storm.update(state, dt)
             if strike_dist_sq <= (player_radius * player_radius) then
                 runtime.player_touched_by_strike = true
                 runtime.player_touched_by_strike_at = now
-                local current_state = state.system.gamestate.get()
-                if current_state ~= state.system.gametype.SHIPWRECKED then
-                    local time_system = (player and player.time_system) or {}
-                    time_system.is_fading = false
-                    time_system.is_sleeping = false
-                    time_system.fade_alpha = 0
-                    time_system.fade_timer = 0
-                    time_system.fade_direction = "in"
+                if not player_docked_or_on_land(state, player) then
+                    local current_state = state.system.gamestate.get()
+                    if current_state ~= state.system.gametype.SHIPWRECKED then
+                        local time_system = (player and player.time_system) or {}
+                        time_system.is_fading = false
+                        time_system.is_sleeping = false
+                        time_system.fade_alpha = 0
+                        time_system.fade_timer = 0
+                        time_system.fade_direction = "in"
 
-                    player.is_swimming = true
-                    player.is_on_foot = true
-                    player.shipwreck_landed = false
-                    player.shipwreck_sleep_timer = 0
-                    player.shipwreck_land_dock_x = nil
-                    player.shipwreck_land_dock_y = nil
-                    player.boat_hidden_until_morning = true
-                    state.shipwreck_reached_land = false
-                    state.shipwreck_landfall_pending_recovery = false
-                    player.pending_shop_interaction = false
-                    player.velocity_x = 0
-                    player.velocity_y = 0
-                    player.on_foot_x = player.x
-                    player.on_foot_y = player.y
-                    state.drowning = tonumber(state.constants and state.constants.ship and state.constants.ship.drowning_time) or 6
-                    state.shipwreck_game_over = nil
+                        player.is_swimming = true
+                        player.is_on_foot = true
+                        player.shipwreck_landed = false
+                        player.shipwreck_sleep_timer = 0
+                        player.shipwreck_land_dock_x = nil
+                        player.shipwreck_land_dock_y = nil
+                        player.boat_hidden_until_morning = true
+                        state.shipwreck_reached_land = false
+                        state.shipwreck_landfall_pending_recovery = false
+                        player.pending_shop_interaction = false
+                        player.velocity_x = 0
+                        player.velocity_y = 0
+                        player.on_foot_x = player.x
+                        player.on_foot_y = player.y
+                        state.drowning = tonumber(state.constants and state.constants.ship and state.constants.ship.drowning_time) or 6
+                        state.shipwreck_game_over = nil
 
-                    state.system.gamestate.set(state.system.gametype.SHIPWRECKED)
-                    state.system.alert.title("Swim to land!!!", 5, {1, 1, 1, 0.7}, 1, 1)
+                        state.system.gamestate.set(state.system.gametype.SHIPWRECKED)
+                        state.system.alert.title("Swim to land!!!", 5, {1, 1, 1, 0.7}, 1, 1)
+                    end
                 end
             end
 

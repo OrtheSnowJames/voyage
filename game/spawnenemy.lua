@@ -293,7 +293,9 @@ function spawnenemy.update(dt, camera, player_x, player_y)
                 if spawn_y then
                     print("DEBUG: Spawn position found at Y=" .. spawn_y .. ", proceeding with enemy creation")
                     local remaining_slots = MAX_ENEMIES_ON_SCREEN - #enemies
-                    local should_spawn_flock = remaining_slots > 0 and math.random(1, FLOCK_SPAWN_CHANCE_DENOMINATOR) == 1
+                    local should_spawn_flock = (not is_dangerous)
+                        and remaining_slots > 0
+                        and math.random(1, FLOCK_SPAWN_CHANCE_DENOMINATOR) == 1
                     local spawn_side = (math.random() < 0.5) and "left" or "right"
                     local spawned_in_danger = resolve_is_dangerous_area(spawn_y)
                     local enemy_speed = 0
@@ -535,6 +537,9 @@ end
 function spawnenemy.spawn_flock_at_y(camera, center_y, size_source_y, spawn_side)
     local y_value = tonumber(center_y)
     if not camera or type(camera) ~= "table" or not y_value then
+        return 0
+    end
+    if resolve_is_dangerous_area(y_value) then
         return 0
     end
     if #enemies >= MAX_ENEMIES_ON_SCREEN then

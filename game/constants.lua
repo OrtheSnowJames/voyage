@@ -172,7 +172,8 @@ local constants = {
             progress_start = 0.5,
             perfect_alignment_bonus = 0.3,
             night_fish_catch_denominator = 90,
-            perfect_hold_forever_bonus = 40
+            perfect_hold_forever_bonus = 60,
+            margin_from_top = 60
         }
     },
     hunger = {

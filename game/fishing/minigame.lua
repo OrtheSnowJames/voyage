@@ -1,10 +1,11 @@
 local minigame_module = {}
 local extra_math = require("game.extra_math")
+local top = require("game.top")
+local constants = require("game.constants")
 
 function minigame_module.create(deps)
     local fishing = deps.fishing
     local size = deps.size
-    local constants = deps.constants
 
     local MINIGAME_CONFIG = constants.fish.minigame or {}
     local FISH_ICON_WIDTH = constants.fish.fish_icon_width or 64
@@ -97,6 +98,16 @@ function minigame_module.create(deps)
         end
 
         return candidate
+    end
+
+    local function pick_top_non_night(fish_pool)
+        for i = #fish_pool, 1, -1 do
+            local fish_name = fish_pool[i]
+            if not fishing.is_night_fish(fish_name) then
+                return fish_name
+            end
+        end
+        return nil
     end
 
     local function build_minigame_result(overrides)
@@ -307,6 +318,13 @@ function minigame_module.create(deps)
             return "Bluegill"
         end
 
+        if quality_score >= 180 then
+            local top_non_night = pick_top_non_night(available_fish)
+            if top_non_night then
+                return top_non_night
+            end
+        end
+
         local candidate = pick_for_quality(available_fish, quality_score)
         return maybe_demote_night_fish(candidate, available_fish, quality_score)
     end
@@ -371,6 +389,11 @@ function minigame_module.create(deps)
         local panel_x = (screen_width - panel_width) / 2
         local panel_y = (screen_height - panel_height) / 2
         local panel_radius = 12
+
+        local top_height = top.get_height(love.graphics.getHeight())
+        if panel_y <= top_height then
+            panel_y = top_height + constants.fish.minigame.margin_from_top
+        end
 
         local progress_width = 24
         local progress_padding = 20

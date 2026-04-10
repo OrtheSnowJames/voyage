@@ -643,6 +643,10 @@ function draw_steps.draw_time_and_debug(state)
         local shop_module = state.shop.module
         local prompt_clicked = false
         local prompt_visible = false
+        local day_length = tonumber(player_ship.time_system.DAY_LENGTH) or 720
+        local current_time = tonumber(player_ship.time_system.time) or 0
+        local current_hours = (current_time / day_length) * 12
+        local sleep_target_time = day_length - (day_length / (12 * 60)) -- 11:59
         local can_disembark_main = shop_module.can_disembark_main_dock and shop_module.can_disembark_main_dock(player_ship, state.shop.keeper)
         local can_disembark_port = shop_module.can_disembark_port_shop and shop_module.can_disembark_port_shop(player_ship)
         if not player_ship.is_on_foot and (can_disembark_main or can_disembark_port) then
@@ -657,6 +661,21 @@ function draw_steps.draw_time_and_debug(state)
             elseif shop_module.can_board_main_dock and shop_module.can_board_main_dock(player_ship) then
                 prompt_visible = true
                 prompt_clicked = action_display.drawKeyPrompt("F", "Board your boat", action_prompt_center_x, action_prompt_center_y)
+            end
+        end
+
+        local can_sleep_on_island = player_ship.is_on_foot
+            and player_ship.dock_walk_mode == "island"
+            and current_hours >= 9.0
+            and current_time < sleep_target_time
+        if can_sleep_on_island then
+            local sleep_button_w = 170
+            local sleep_button_h = 34
+            local sleep_button_x = action_prompt_center_x - (sleep_button_w / 2)
+            local sleep_button_y = action_prompt_center_y - action_prompt_height - 10
+            if suit.Button("Sleep", {id = "island_sleep_1159"}, sleep_button_x, sleep_button_y, sleep_button_w, sleep_button_h).hit then
+                player_ship.time_system.time = sleep_target_time
+                print("Slept until 11:59")
             end
         end
 
@@ -805,6 +824,7 @@ function draw_steps.draw_time_and_debug(state)
             print("storm triggered and time set to night")
         end
 
+        --[[
         if suit.Button("Toggle Wave Intensity (0/3)", suit.layout:row(190, 30)).hit then
             if not state.system.water then
                 state.system.water = {wave_intensity = 1.0}
@@ -813,6 +833,7 @@ function draw_steps.draw_time_and_debug(state)
             state.system.water.wave_intensity = (current >= 2.5) and 0 or 3
             print(string.format("Wave intensity set to %.1f", state.system.water.wave_intensity))
         end
+        ]]
 
         if suit.Button("Print Collision Debug", suit.layout:row(150, 30)).hit then
             print("--- collision debug ---")
