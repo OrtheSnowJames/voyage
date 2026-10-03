@@ -138,4 +138,25 @@ function shaders.create()
     return shore_shader, water_shader
 end
 
+function shaders.scanline()
+    local ok, scanline_shader_or_err = pcall(love.graphics.newShader, [[
+        extern number lineSpacing;
+        extern number darkness;
+        extern number yOffset;
+
+        vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
+            number row = floor((screen_coords.y - yOffset) / max(1.0, lineSpacing));
+            number shade = (mod(row, 2.0) == 0.0) ? darkness : 1.0;
+            return vec4(color.rgb * shade, color.a);
+        }
+]])
+
+    if not ok then
+        print("[mod_terminal] scanline shader failed: " .. tostring(scanline_shader_or_err))
+        return nil
+    end
+
+    return scanline_shader_or_err
+end
+
 return shaders

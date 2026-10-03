@@ -1,6 +1,7 @@
 local mods = require("game.mods")
 local scrolling = require("game.scrolling")
 local extra_math = require("game.extra_math")
+local shaders = require("game.shaders")
 local clamp = extra_math.clamp
 
 local mod_terminal = {}
@@ -20,22 +21,12 @@ local function get_scanline_shader()
         return scanline_shader
     end
 
-    local ok, shader_or_err = pcall(love.graphics.newShader, [[
-        extern number lineSpacing;
-        extern number darkness;
-        extern number yOffset;
-
-        vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
-            number row = floor((screen_coords.y - yOffset) / max(1.0, lineSpacing));
-            number shade = (mod(row, 2.0) == 0.0) ? darkness : 1.0;
-            return vec4(color.rgb * shade, color.a);
-        }
-    ]])
+    local shader_or_nil = shaders.scanline()
+    local ok = shader_or_nil ~= nil
 
     if ok then
-        scanline_shader = shader_or_err
+        scanline_shader = shader_or_nil
     else
-        print("[mod_terminal] scanline shader failed: " .. tostring(shader_or_err))
         scanline_shader = false
     end
 
