@@ -462,7 +462,8 @@ function update_steps.combat_state(dt, state)
                 enemy.size,
                 state.combat.module.get_sword_level(player_ship.sword),
                 state.combat.module.get_sword_top_rarity(),
-                player_ship.y
+                player_ship.y,
+                state
             )
 
             if result.victory then

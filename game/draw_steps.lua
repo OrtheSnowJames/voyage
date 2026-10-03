@@ -345,6 +345,41 @@ local function draw_combat_result_text(state)
         }
     end
 
+    local rainbows_level = state.system.player.rainbows
+    if rainbows_level > 0 then
+        if rainbows_level == 0.1 then
+            result_text = {
+                "...",
+                "Nobody really wanted to fight...",
+                "...",
+            }
+        elseif rainbows_level == 0.2 then
+            result_text = {
+                "...",
+                "They tried to turn away...",
+                "..."
+            }
+        elseif rainbows_level == 0.3 then
+            result_text = {
+                "...",
+                "They couldn't...",
+                "..."
+            }
+        elseif rainbows_level == 0.4 then
+            result_text = {
+                "...",
+                "They are afraid of you...",
+                "..."
+            }
+        else
+            result_text = {
+                "...",
+                "...",
+                "..."
+            }
+        end
+    end
+
     if not result_text then
         return
     end
