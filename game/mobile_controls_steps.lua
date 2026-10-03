@@ -1,4 +1,5 @@
 local mobile_controls_steps = {}
+local action_display = require("game.action_display")
 
 local function update_button_positions(state, size)
     local button_size = state.button_size
@@ -60,6 +61,7 @@ function mobile_controls_steps.draw(state, size)
 
     for button_name, button in pairs(state.buttons) do
         if not is_button_hidden(state, button_name) then
+            --[[
             local alpha = button.pressed and 1.0 or state.button_alpha
             local color_multiplier = button.pressed and 0.7 or 1.0
 
@@ -76,6 +78,8 @@ function mobile_controls_steps.draw(state, size)
             local text_width = font:getWidth(text)
             local text_height = font:getHeight()
             love.graphics.print(text, button.x - text_width / 2, button.y - text_height / 2)
+            ]]
+            action_display.drawKeycapCentered(button.key:upper(), button.x, button.y)
         end
     end
 

@@ -7,6 +7,7 @@ function core.create(deps)
     local FISHING_LEVEL = constants.fishing_level
     local FISH_VALUE_OFFSET = constants.fish.value_offset or 0
     local GOLD_STURGEON_VALUE = constants.fish.gold_sturgeon_value or 100000
+    local FISH_WINDOW_SIZE = 3 -- how many fish can be caught at one level
     local NIGHT_FISH_VALUE_MULTIPLIER = constants.fish.night_fish_value_multiplier or 1000
 
     local fish = {
@@ -149,6 +150,11 @@ function core.create(deps)
         corruption_level = math.max(0, tonumber(level) or 0)
     end
 
+    -- the deepest level that still unlocks new fish; deeper levels reuse its last window of fish
+    function fishing.get_max_fish_level()
+        return math.max(1, #fish - (FISH_WINDOW_SIZE - 1))
+    end
+
     function fishing.get_fish_available(x, y, game_time)
         if corruption_level >= 0.3 then
             print("The water remembers..")
@@ -156,13 +162,8 @@ function core.create(deps)
         end
 
         local depth_level = standardize_depth(y)
-        local start_index = depth_level
-        local end_index = start_index + 2
-
-        if end_index > #fish then
-            end_index = #fish
-            start_index = end_index - 2
-        end
+        local start_index = math.min(depth_level, fishing.get_max_fish_level())
+        local end_index = start_index + FISH_WINDOW_SIZE - 1
 
         local available_fish = {}
         for i = start_index, end_index do

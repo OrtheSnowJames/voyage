@@ -124,6 +124,7 @@ state.fishing = {
     minigame = fishing_minigame,
     config = game_config,
     event = special_fish_event,
+    max_level = fishing.get_max_fish_level(), -- deepest level that still unlocks new fish
     runtime = nil
 }
 state.combat = {
@@ -310,10 +311,10 @@ local function reset_game(keep_days)
     if not keep_days then
         days.reset()
     end
-    
+
     -- clear enemies
     spawnenemy.clear_enemies()
-    
+
     -- reset player ship to initial state
     state.drowning = constants.ship.drowning_time
     state.shipwreck_reached_land = false
@@ -385,15 +386,15 @@ local function reset_game(keep_days)
     special_fish_event.timer = 0
     special_fish_event.fish_name = ""
     special_fish_event.caught_gold_sturgeon = false
-    
+
     -- reset mobile controls
     for _, button in pairs(mobile_controls.buttons) do
         button.pressed = false
     end
-    
+
     -- reset shore objects
     init_shore_objects()
-    
+
     -- reset ship_ripples
     for i = #ship_ripples, 1, -1 do
         ship_ripples[i] = nil
@@ -620,7 +621,7 @@ local function flag_save_as_rainbows(reason)
     end
 
     player_ship.rainbows = RAINBOWS_START_VALUE
-    print(string.format("Cheat detector flagged save: %s (rainbows=%.1f)", reason, player_ship.rainbows)) 
+    print(string.format("Cheat detector flagged save: %s (rainbows=%.1f)", reason, player_ship.rainbows))
     print("lollipops and rainbows headed your way!")
     serialize.save_data(game.get_saveable_data())
     force_corruption_sleep_if_needed()
@@ -868,7 +869,7 @@ function game.load()
     if state.fishing.runtime then
         state.fishing.runtime.reset_state()
     end
-    
+
     -- initialize shore objects
     init_shore_objects()
     cheat_runtime.last_observed_time = player_ship.time_system.time
@@ -877,6 +878,7 @@ function game.load()
     detect_cheating()
     morningtext.start(player_ship.rainbows)
     mods.run_hook("on_game_load", state)
+    glitch_screen = love.load("assets/glitch.png")
 end
 
 -- ship animation
@@ -908,15 +910,15 @@ local function trigger_special_fish_event(fish_name)
     special_fish_event.active = true
     special_fish_event.timer = 0
     special_fish_event.fish_name = fish_name
-    
+
     -- if it's gold sturgeon, mark it as caught for the night
     if fish_name == "Gold Sturgeon" then
         special_fish_event.caught_gold_sturgeon = true
     end
-    
+
     -- add a paused-state catch text that will be shown after the event
     state.fishing.runtime.add_catch_text("You: " .. fish_name)
-    
+
     -- don't add to inventory yet - will be added after the event
 end
 
@@ -978,7 +980,7 @@ local function during_sleep()
 
     -- check if near any shop (port-a-shop or shopkeeper)
     local near_shop = false
-    
+
     -- check port-a-shops
     for _, shop_data in ipairs(port_a_shops) do
         if shop_data.is_spawned then
@@ -989,7 +991,7 @@ local function during_sleep()
             end
         end
     end
-    
+
     -- check main shopkeeper if not already near a port-a-shop
     if not near_shop and shopkeeper and shopkeeper.is_spawned then
         local distance_to_main_shop = math.sqrt((shopkeeper.x - player_ship.x)^2 + (shopkeeper.y - player_ship.y)^2)
@@ -997,7 +999,7 @@ local function during_sleep()
             near_shop = true
         end
     end
-    
+
     -- if near a shop, recover fainted enemy crew members
     if near_shop and player_ship.fainted_men > 0 then
         print("Recovering " .. player_ship.fainted_men .. " fainted enemy crew member(s)...")
@@ -1170,6 +1172,17 @@ function game.update(dt)
     return nil
 end
 
+function drawGlitch(state)
+    local player = state.system.player
+    if not state.player.rainbows > 0 then return end
+
+    local max_fishing_level = state.fishing.max_level - 2 -- so the glitch happens way before
+    local max_fishing_level_y = constants.fishing_level * max_fishing_level
+    if glitch_screen and player.y > max_fishing_level_y then
+        love.graphics.draw(glitch_screen, 0, 0)
+    end
+end
+
 function game.draw()
     draw_steps.draw_background(state)
     draw_steps.draw_world(state)
@@ -1179,6 +1192,7 @@ function game.draw()
     draw_steps.draw_special_event_overlay(state)
     mods.run_hook("on_draw", state)
     wake_up.draw()
+    drawGlitch(state)
 end
 
 -- make player_ship accessible to other modules

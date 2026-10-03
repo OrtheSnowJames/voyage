@@ -120,6 +120,13 @@ function action_display.drawKeycap(key, x, y, padding)
     return w, h
 end
 
+function action_display.drawKeycapCentered(key, x, y, padding)
+    local w, h = measure_keycap(key, padding)
+    local px = x - (w / 2)
+    local py = y - (h / 2)
+    action_display.drawKeycap(key, px, py, padding)
+end
+
 function action_display.drawKeyPrompt(key, prompt, x, y)
     local margin = PROMPT_MARGIN
     local px = x - (PROMPT_WIDTH / 2)
