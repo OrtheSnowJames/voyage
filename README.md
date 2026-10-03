@@ -22,6 +22,7 @@ Press `F` to fish. Your crew fishes automatically after the cooldown.
 * More crew than the enemy = victory
 * Fewer crew = defeat (and save loss)
 * Winning gives you **fainted enemy crew** you can recover
+* If you lose every **loyal** crew member (the ones you hired, including Jonas) while enemy crew are still aboard, the enemy crew rebel and kill you. Your run ends and resets to the menu.
 * Stronger swords reduce your losses
 * Rare flock spawns (1 in 20) can fill remaining enemy slots with a tight enemy cluster.
 
@@ -34,6 +35,25 @@ Bringing way more crew than the enemy causes **carelessness**, leading to heavy 
 * If all crew die from hunger, your run resets to menu (not tested yet!).
 * You can feed crew from caught fish (manual `Feed` / `Feed All` controls).
 * **Night fish** and **Gold Sturgeon** cannot be used as crew food (sadly).
+
+### Selling Crew Members
+
+* You can sell crew members to get couns back.
+* If a crew member is sold, the shop will revert the price to before the crew member was bought.
+* You can only sell crew members bought from the shop.
+* Enemy crew cannot be sold.
+
+### Jonas's Journal
+
+* You start with one crew member, **Jonas**. He is very loyal: he can never be sold, and he is the one who writes the journal.
+* Each day, Jonas records a synopsis of the day's events.
+* Open it from the crew tab with the **Jonas's Journal** button (the Crew button becomes **Close**; `Esc`, `Enter` and `Space` also close it).
+* Use the left and right arrows to browse days. Going past the last day wraps to the first, and vice versa.
+* When you wake up, the journal opens on the day that just ended, and then the new day starts ("Day 2", and so on).
+* Each page lists:
+  * Milestones: leaving shore for the first time, new sections of water, rod and sword upgrades, Sturgeon, Gold Sturgeon, and shipwrecks
+  * A short note from Jonas about how the day went, for example after a shipwreck: *"We lost five men today. I don't know how the captain managed to get us to shore, but somehow we made it."*
+  * Stats: fish discovered, fish caught, coins gained and lost, crew gained and lost, enemies defeated, and steps walked (pixels / 10)
 
 ### Progression
 

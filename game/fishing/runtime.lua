@@ -1,4 +1,5 @@
 local runtime_module = {}
+local days = require("game.days")
 
 local function update_catch_text_offsets(catch_texts, spacing)
     for i, catch in ipairs(catch_texts) do
@@ -57,6 +58,7 @@ function runtime_module.create(deps)
 
         add_catch_text((fisher_name or "You") .. ": " .. fish_caught)
         table.insert(deps.player_ship.caught_fish, fish_caught)
+        days.record_catch(fish_caught)
         return true
     end
 

@@ -2,6 +2,8 @@ local update_steps = {}
 local constants = require("game.constants")
 local time_utils = require("game.time_utils")
 local storm = require("game.storm")
+local days = require("game.days")
+local REBELLION_DURATION = 5 -- seconds the mutiny message shows before the run resets
 local RECOVERY_BAY_MAX = constants.combat.recovery_bay_max or 15
 
 local function clear_catch_texts(state)
@@ -126,6 +128,7 @@ function update_steps.sleep_fade_state(dt, state)
                     time_system.fade_timer = 0
                     gamestate.set(GameType.VOYAGE)
                     state.system.ui.morningtext.start(player_ship.rainbows)
+                    days.show_recap()
                     if state.system.ui.wake_up and state.system.ui.wake_up.start then
                         state.system.ui.wake_up.start()
                     end
@@ -136,6 +139,39 @@ function update_steps.sleep_fade_state(dt, state)
             end
         end
     end
+end
+
+-- losing every loyal man leaves only enemy crew aboard, and they mutiny.
+-- returns nil when nothing is happening, false while the ending plays, GameType.MENU once the run is over
+function update_steps.rebellion(dt, state)
+    local gamestate = state.system.gamestate
+    local GameType = state.system.gametype
+    local player = state.system.player
+    local time_system = player.time_system
+    local rebellion = state.rebellion
+
+    if not rebellion then
+        local loyal_men = tonumber(player.loyal_men)
+        if gamestate.get() ~= GameType.VOYAGE or not loyal_men or loyal_men > 0 or (tonumber(player.men) or 0) <= 0 then
+            return nil
+        end
+        rebellion = {timer = 0, duration = REBELLION_DURATION}
+        state.rebellion = rebellion
+        state.system.alert.title("The enemy crew rebelled and killed you.", rebellion.duration, {1, 0.3, 0.3, 1}, 1, 1)
+    end
+
+    rebellion.timer = rebellion.timer + dt
+    local fade_start = rebellion.duration * 0.5
+    time_system.fade_alpha = math.max(0, math.min(1, (rebellion.timer - fade_start) / (rebellion.duration - fade_start)))
+
+    if rebellion.timer >= rebellion.duration then
+        state.rebellion = nil
+        time_system.fade_alpha = 0
+        state.system.actions.reset_game()
+        gamestate.set(GameType.MENU)
+        return GameType.MENU
+    end
+    return false
 end
 
 function update_steps.handle_back_to_menu_button(state)
@@ -247,7 +283,7 @@ function update_steps.shop_and_navigation(dt, state)
 
     if current_state == GameType.VOYAGE or current_state == GameType.SHIPWRECKED or current_state:find(GameType.SHOP, 1, true) then
         state.shop.module.update(gamestate, player, state.shop.keeper, state.fishing.config)
-        if (current_state == GameType.VOYAGE or current_state == GameType.SHIPWRECKED) and not state.shipwreck_game_over then
+        if (current_state == GameType.VOYAGE or current_state == GameType.SHIPWRECKED) and not state.shipwreck_game_over and not days.is_open() then
             player:update(dt)
         end
         state.system.actions.update_ship_animation(dt)
@@ -341,11 +377,8 @@ local function determine_casualties_to_loyal(casualties, state)
     local player_ship = state.system.player
     local unloyal_men = player_ship.men - player_ship.loyal_men
 
-    if casualties <= unloyal_men then
-        return 0 -- no casualties to loyal men
-    else
-        return player_ship.loyal_men - (casualties - unloyal_men)
-    end
+    -- enemy crew take the losses first; whatever is left over comes out of the loyal crew
+    return math.max(0, math.min(player_ship.loyal_men, casualties - unloyal_men))
 end
 
 function update_steps.combat_state(dt, state)
@@ -381,8 +414,11 @@ function update_steps.combat_state(dt, state)
             )
 
             if result.victory then
+                days.record_enemy_defeated()
+                -- loyal losses depend on the crew mix before the casualties come off
+                local loyal_lost = determine_casualties_to_loyal(result.casualties, state)
                 player_ship.men = player_ship.men - result.casualties
-                player_ship.loyal_men = player_ship.loyal_men - determine_casualties_to_loyal(result.casualties, state)
+                player_ship.loyal_men = player_ship.loyal_men - loyal_lost
                 local open_slots = math.max(0, RECOVERY_BAY_MAX - player_ship.fainted_men)
                 local stored_fainted = math.min(open_slots, result.fainted)
                 local overflow_fainted = math.max(0, result.fainted - stored_fainted)
@@ -489,6 +525,7 @@ function update_steps.special_fish_event(dt, state)
     if special_fish_event.timer >= special_fish_event.duration then
         special_fish_event.active = false
         table.insert(state.system.player.caught_fish, special_fish_event.fish_name)
+        days.record_catch(special_fish_event.fish_name)
         print('Special fish caught: ' .. special_fish_event.fish_name)
     end
 end

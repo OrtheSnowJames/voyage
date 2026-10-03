@@ -80,7 +80,7 @@ local function create_player_ship(sprite)
         debug_menu_opened = false,
         reached_first_1130 = false,
         time_system = create_player_time_system(),
-        sprite = sprite
+        sprite = sprite,
     }
 end
 

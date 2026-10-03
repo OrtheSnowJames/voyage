@@ -87,6 +87,7 @@ local constants = {
         start_x = 100,
         start_y = 100,
         start_crew = 1,
+        start_crew_name = "Jonas", -- the one very loyal crew member you start with; narrates the journal
         radius = 20,
         max_speed = 200,
         acceleration = 50,
@@ -101,6 +102,10 @@ local constants = {
         sleep_duration = 10,
         fade_duration = 2,
         morningtext_fade_duration = 2
+    },
+    days = {
+        pixels_per_step = 10, -- pixels travelled per "step" shown in the day summary
+        teleport_pixels = 200 -- a single-frame move larger than this is a teleport, not travel
     },
     world = {
         shore_division = 60,

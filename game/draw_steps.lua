@@ -4,6 +4,7 @@ local crew_management = require("game.crew_management")
 local action_display = require("game.action_display")
 local top_bar = require("game.top")
 local storm = require("game.storm")
+local days = require("game.days")
 
 local PLAYER_SHEET_PATH = "assets/Pirates Red Sprite Sheet.png"
 local SLEEPING_SPRITE_PATH = "assets/sleeping.png"
@@ -615,6 +616,7 @@ function draw_steps.draw_post_world_overlays(state)
 
     crew_management.draw_overlay(state)
     state.system.ui.morningtext.draw(state)
+    days.draw()
 end
 
 function draw_steps.draw_time_and_debug(state)

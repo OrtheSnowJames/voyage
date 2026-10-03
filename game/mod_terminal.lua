@@ -235,12 +235,35 @@ local function get_lua_env(term)
             end
             term:push(table.concat(parts, "\t"))
         end
-    }, {__index = _G})
+    }, {
+        __index = function(_, key)
+            if key == "io"
+                or key == "os"
+                or key == "package"
+                or key == "require"
+                or key == "dofile"
+                or key == "loadfile"
+            then
+                return nil
+            end
+
+            return _G[key]
+        end
+    })
+
     return term.lua_repl_env
 end
 
 local function try_run_lua(code, term)
     local env = get_lua_env(term)
+
+    -- Remove jailbreak functions/libraries
+    env.io = nil
+    env.os = nil
+    env.package = nil
+    env.require = nil
+    env.dofile = nil
+    env.loadfile = nil
 
     local function make_chunk(src)
         if _VERSION == "Lua 5.1" and setfenv then
@@ -248,40 +271,49 @@ local function try_run_lua(code, term)
             if not chunk then
                 return nil, err
             end
+
             setfenv(chunk, env)
             return chunk, nil
         end
+
         return load(src, "terminal", "t", env)
     end
 
     local eval_chunk = make_chunk("return " .. code)
+
     if eval_chunk then
         local ok, result = pcall(eval_chunk)
+
         if not ok then
             term:push(result)
             return nil, result
         elseif result ~= nil then
             term:push(tostring(result))
         end
+
         return true
     end
 
     local chunk, err = make_chunk(code)
+
     if not chunk then
         if err and err:match("<eof>") then
             return false, err
         end
+
         term:push(err or "lua compile error")
         return nil, err
     end
 
     local ok, result = pcall(chunk)
+
     if not ok then
         term:push(result)
         return nil, result
     elseif result ~= nil then
         term:push(tostring(result))
     end
+
     return true
 end
 

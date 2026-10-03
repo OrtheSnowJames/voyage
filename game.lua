@@ -28,6 +28,7 @@ local hunger = require("game.hunger")
 local crew_management = require("game.crew_management")
 local alert = require("game.alert")
 local wake_up = require("game.wake_up")
+local days = require("game.days")
 local FISHING_LEVEL = constants.fishing_level
 local fishing_minigame = fishing.minigame
 
@@ -54,6 +55,7 @@ local player_ship = state.core.player_ship
 local ripples = state.core.ripples
 
 state.player = player_ship
+days.attach(player_ship)
 state.drowning = constants.ship.drowning_time
 state.shipwreck_reached_land = false
 state.shipwreck_landfall_pending_recovery = false
@@ -301,9 +303,13 @@ reset_cheating_state = function()
     spawnenemy.set_corruption_state(0, 0)
 end
 
-local function reset_game()
+local function reset_game(keep_days)
     -- delete save file
     love.filesystem.remove("save.lua")
+
+    if not keep_days then
+        days.reset()
+    end
     
     -- clear enemies
     spawnenemy.clear_enemies()
@@ -316,6 +322,7 @@ local function reset_game()
     player_ship.x = constants.ship.start_x
     player_ship.y = constants.ship.start_y
     player_ship.men = constants.ship.start_crew
+    player_ship.loyal_men = constants.ship.start_crew
     player_ship.fainted_men = 0
     player_ship.velocity_x = 0
     player_ship.velocity_y = 0
@@ -408,7 +415,7 @@ local function reset_after_shipwreck_landfall()
     local kept_y = tonumber(player_ship.shipwreck_land_dock_y) or tonumber(player_ship.y) or constants.ship.start_y
     local kept_rotation = tonumber(player_ship.rotation) or 0
 
-    reset_game()
+    reset_game(true)
 
     player_ship.inventory = kept_inventory
     player_ship.caught_fish = {}
@@ -999,6 +1006,8 @@ local function during_sleep()
         print("All fainted enemy crew recovered!")
     end
 
+    days.next_day(state)
+
     -- note: game will be saved after waking up, not during sleep
 end
 
@@ -1052,6 +1061,10 @@ state.actions.force_corruption_sleep_if_needed = force_corruption_sleep_if_neede
 
 -- handle key presses in the game
 function game.keypressed(key)
+    if days.keypressed(key) then
+        return
+    end
+
     if key == "f" and gamestate.get() == GameType.VOYAGE then
         local function consume_f_press_for_fishing()
             if state and state.fishing and state.fishing.runtime and state.fishing.runtime.block_fishing_until_release then
@@ -1105,6 +1118,7 @@ end
 function game.update(dt)
     force_corruption_sleep_if_needed()
     update_steps.day_night_cycle(dt, state)
+    days.sample(state)
     morningtext.observe_time(get_time_of_day_hours())
     morningtext.update(dt)
     alert.update(dt)
@@ -1126,6 +1140,11 @@ function game.update(dt)
     local hunger_result = hunger.update(dt, state)
     if hunger_result then
         return hunger_result
+    end
+
+    local rebellion_result = update_steps.rebellion(dt, state)
+    if rebellion_result ~= nil then
+        return rebellion_result or nil
     end
 
     update_steps.shop_and_navigation(dt, state)

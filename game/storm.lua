@@ -1,4 +1,5 @@
 local storm = {}
+local days = require("game.days")
 
 local radius_of_spread = 10
 local DOT_SIZE = 50
@@ -553,6 +554,7 @@ function storm.update(state, dt)
                         state.shipwreck_game_over = nil
 
                         state.system.gamestate.set(state.system.gametype.SHIPWRECKED)
+                        days.record_shipwreck()
                         state.system.alert.title("Swim to land!!!", 5, {1, 1, 1, 0.7}, 1, 1)
                     end
                 end

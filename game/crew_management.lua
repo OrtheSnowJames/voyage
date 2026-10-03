@@ -3,6 +3,8 @@ local hunger = require("game.hunger")
 local shop = require("shop")
 local alert = require("game.alert")
 local top_bar = require("game.top")
+local days = require("game.days")
+local constants = require("game.constants")
 
 local panel_open = false
 
@@ -71,6 +73,12 @@ local function get_layout(size, mobile)
             y = action_row_y,
             width = ACTION_WIDTH,
             height = ACTION_HEIGHT
+        },
+        journal = {
+            x = right_x,
+            y = action_row_y + ACTION_HEIGHT + ACTION_STACK_GAP,
+            width = ACTION_WIDTH,
+            height = ACTION_HEIGHT
         }
     }
 end
@@ -86,8 +94,13 @@ function crew_management.handle_buttons(state)
     local suit = state.system.ui.suit
     local layout = get_layout(state.system.size, state.system.ui.mobile)
 
-    local toggle_label = panel_open and "Close Crew" or "Crew"
+    local journal_open = days.is_open()
+    local toggle_label = journal_open and "Close" or (panel_open and "Close Crew" or "Crew")
     if suit.Button(toggle_label, {id = "crew_panel_toggle"}, layout.toggle.x, layout.toggle.y, layout.toggle.width, layout.toggle.height).hit then
+        if journal_open then
+            days.close()
+            return
+        end
         panel_open = not panel_open
     end
 
@@ -127,6 +140,11 @@ function crew_management.handle_buttons(state)
         else
             alert.show("Not enough crew", 1.6, {1, 0.3, 0.3, 1})
         end
+    end
+
+    if suit.Button(constants.ship.start_crew_name .. "'s Journal", {id = "crew_journal"}, layout.journal.x, layout.journal.y, layout.journal.width, layout.journal.height).hit then
+        panel_open = false
+        days.open()
     end
 end
 
