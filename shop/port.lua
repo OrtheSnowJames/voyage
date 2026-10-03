@@ -24,6 +24,7 @@ function port.create(deps)
     local SHOP_LINE_NO_FISH_DISTANCE = constants.shops.no_fish_line_distance or 50
     local SHORE_DIVISION = constants.world.shore_division or 60
     local SHOP_SPACING = constants.fishing_level
+    local get_end_coast_y = deps.get_end_coast_y
     local INTERACTION_RANGE = 70
     local PORT_DOCK_WIDTH = 30
     local PORT_DOCK_HEIGHT = 30
@@ -708,7 +709,18 @@ function port.create(deps)
         return any_shop_active, port_shop_active, main_shop_active
     end
 
+    -- the far coastline takes the last level, so shops stop one level short of it
+    function api.can_add_port_a_shop()
+        if not get_end_coast_y then
+            return true
+        end
+        return (#port_a_shops + 1) * SHOP_SPACING < get_end_coast_y()
+    end
+
     function api.add_port_a_shop()
+        if not api.can_add_port_a_shop() then
+            return
+        end
         local shop_number = #port_a_shops + 1
         local target_y = shop_number * SHOP_SPACING
         table.insert(port_a_shops, {
@@ -979,6 +991,9 @@ function port.create(deps)
 
         local start_y = math.floor((camera.y - view_height) / SHOP_SPACING) * SHOP_SPACING
         local end_y = math.ceil((camera.y + view_height * 2) / SHOP_SPACING) * SHOP_SPACING
+        if get_end_coast_y then
+            end_y = math.min(end_y, get_end_coast_y()) -- the lines stop at the far coastline
+        end
 
         love.graphics.setColor(0.3, 0.3, 0.5, 0.3)
         love.graphics.setLineWidth(2)

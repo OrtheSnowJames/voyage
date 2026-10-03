@@ -79,6 +79,9 @@ function movement_steps.update_player_ship(self, dt, ctx)
         if self.y < min_swim_y then
             self.y = min_swim_y
         end
+        if ctx.end_coast_y then
+            self.y = math.min(self.y, ctx.end_coast_y - (ctx.end_swim_min_distance or 30))
+        end
 
         self.on_foot_x = self.x
         self.on_foot_y = self.y
@@ -136,6 +139,14 @@ function movement_steps.update_player_ship(self, dt, ctx)
             max_y = shoreline_y
             if dock_x and dock_bottom_y and math.abs(self.on_foot_x - dock_x) <= dock_half_width then
                 max_y = math.max(shoreline_y, dock_bottom_y)
+            end
+        elseif on_foot_bounds_mode == "end_coast" and ctx.end_coast_y then
+            -- the far coast mirrors the starting shore: land is below the waterline, the dock tip is the way out
+            local shoreline_y = ctx.end_coast_y + (ctx.end_shoreline_walk_offset_y or 20)
+            min_y = shoreline_y
+            max_y = walk_center_y + max_walk_up
+            if dock_x and dock_bottom_y and math.abs(self.on_foot_x - dock_x) <= dock_half_width then
+                min_y = math.min(shoreline_y, dock_bottom_y)
             end
         end
 
@@ -212,6 +223,10 @@ function movement_steps.update_player_ship(self, dt, ctx)
         if new_y <= ctx.shore_division + min_shore_distance then
             new_y = ctx.shore_division + min_shore_distance
             self.velocity_y = math.max(0, self.velocity_y or 0)
+        end
+        if ctx.end_coast_y and new_y >= ctx.end_coast_y - (ctx.end_boat_min_distance or 40) then
+            new_y = ctx.end_coast_y - (ctx.end_boat_min_distance or 40)
+            self.velocity_y = math.min(0, self.velocity_y or 0)
         end
         self.x = new_x
         self.y = new_y
@@ -298,6 +313,11 @@ function movement_steps.update_player_ship(self, dt, ctx)
     if new_y <= ctx.shore_division + min_shore_distance then
         new_y = ctx.shore_division + min_shore_distance
         self.velocity_y = math.max(0, self.velocity_y)
+        self.velocity_x = self.velocity_x * 0.98
+    end
+    if ctx.end_coast_y and new_y >= ctx.end_coast_y - (ctx.end_boat_min_distance or 40) then
+        new_y = ctx.end_coast_y - (ctx.end_boat_min_distance or 40)
+        self.velocity_y = math.min(0, self.velocity_y)
         self.velocity_x = self.velocity_x * 0.98
     end
 

@@ -129,7 +129,9 @@ local function render_port_shop_section(ctx, x, y, section_width)
     suit.Label("Port-a-Shops", {align = "center"}, suit.layout:row(section_width, 30))
 
     local next_shop_cost = economy.get_next_shop_cost(port.get_port_a_shop_count())
-    if runtime_state.coins >= next_shop_cost then
+    if port.can_add_port_a_shop and not port.can_add_port_a_shop() then
+        suit.Label("Every level has a shop", {align = "center"}, suit.layout:row(section_width, 30))
+    elseif runtime_state.coins >= next_shop_cost then
         if suit.Button("Buy Port-a-Shop (" .. next_shop_cost .. " coins)", suit.layout:row(section_width, 30)).hit then
             runtime_state.coins = runtime_state.coins - next_shop_cost
             port.add_port_a_shop()

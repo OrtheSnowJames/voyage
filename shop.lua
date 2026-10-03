@@ -10,7 +10,8 @@ local sand = require("sand")
 local port = require("shop.port").create({
     constants = constants,
     size = size,
-    sand = sand
+    sand = sand,
+    get_end_coast_y = fishing.get_end_coast_y
 })
 
 local economy = require("shop.economy").create({

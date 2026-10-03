@@ -15,6 +15,8 @@ local SPAWN_MARGIN = 100  -- spawn enemies slightly outside view
 local SHORE_DIVISION = constants.world.shore_division
 local MIN_SHORE_DISTANCE = 40  -- minimum distance from shore (match player ship restriction)
 local SHOP_SAFE_DISTANCE = 50  -- minimum distance from shops for enemy spawns
+local end_coast_y = nil -- the far coastline; nothing spawns near or beyond it
+local end_coast_safe_distance = 0
 local SHOP_LINE_NO_FOLLOW_DISTANCE = 10  -- much tighter than spawn safety zone
 
 -- excessive spawning configuration
@@ -230,6 +232,9 @@ function spawnenemy.update(dt, camera, player_x, player_y)
             -- calculate valid y range for spawning
             local min_y = math.max(200, camera.y)  -- minimum y position (at least 200)
             local max_y = camera.y + view_height - SPAWN_MARGIN  -- maximum y position (within view)
+            if end_coast_y then
+                max_y = math.min(max_y, end_coast_y - end_coast_safe_distance)
+            end
             
             print("DEBUG: Y range - min: " .. min_y .. ", max: " .. max_y .. ", camera.y: " .. camera.y .. ", view_height: " .. view_height)
             
@@ -506,6 +511,11 @@ function spawnenemy.clear_enemies()
     spawn_timer = ENEMY_SPAWN_INTERVAL
 end
 
+function spawnenemy.set_end_coast_y(y, safe_distance)
+    end_coast_y = tonumber(y)
+    end_coast_safe_distance = tonumber(safe_distance) or 0
+end
+
 function spawnenemy.set_corruption_state(level, radius)
     corruption_level = math.max(0, tonumber(level) or 0)
     pull_radius = math.max(0, tonumber(radius) or 0)
@@ -549,6 +559,9 @@ function spawnenemy.spawn_flock_at_y(camera, center_y, size_source_y, spawn_side
     local view_height = love.graphics.getHeight() / camera.scale
     local min_y = math.max(200, camera.y)
     local max_y = camera.y + view_height - SPAWN_MARGIN
+    if end_coast_y then
+        max_y = math.min(max_y, end_coast_y - end_coast_safe_distance)
+    end
     if max_y <= min_y then
         return 0
     end

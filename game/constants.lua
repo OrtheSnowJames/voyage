@@ -203,6 +203,23 @@ local constants = {
         money_growth_per_depth = 1.75,
         money_per_crew_bonus = 500
     },
+    end_coast = {
+        boat_min_distance = 40, -- how close the boat can get to the far coastline
+        swim_min_distance = 30,
+        dock_interaction_range = 25,
+        dock_boat_range = 45, -- boat must be this close to the shoreline to dock
+        dock_width = 36,
+        dock_base_offset_y = 16,
+        dock_length = 42,
+        disembark_offset_y = 4,
+        shoreline_walk_offset_y = 20,
+        walk_max_side = 260,
+        walk_max_depth = 240,
+        house_side_offset_x = 110,
+        house_land_offset_y = 100,
+        house_scale = 2,
+        enemy_safe_distance = 150 -- no enemies spawn this close to the far coast
+    },
     corruption = {
         start_value = 0.1,
         step = 0.1,

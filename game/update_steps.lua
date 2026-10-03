@@ -341,6 +341,7 @@ function update_steps.shop_and_navigation(dt, state)
         state.system.actions.update_ship_animation(dt)
         state.system.actions.update_shore_objects()
         state.shop.keeper:update(player.x, player.y, dt)
+        state.end_coast:update(player.x, dt)
         if current_state == GameType.VOYAGE and state.shop.module.resolve_boat_collisions then
             state.shop.module.resolve_boat_collisions(player, state.shop.keeper)
         end

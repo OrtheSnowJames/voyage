@@ -1,4 +1,5 @@
 local mods = {}
+local times_beaten = require("game.times_beaten")
 
 local loaded_mods = {}
 local mods_enabled = true
@@ -65,12 +66,27 @@ local function load_game_modules_into_state(state)
 end
 
 local function make_api()
-    return {
+    local api = {
         fs = love.filesystem,
         log = function(...)
             print("[mod]", ...)
         end
     }
+    -- api.times_beaten is read live from the signed record and is read-only
+    return setmetatable(api, {
+        __index = function(_, key)
+            if key == "times_beaten" then
+                return times_beaten.get()
+            end
+        end,
+        __newindex = function(t, key, value)
+            if key == "times_beaten" then
+                print("[mods] api.times_beaten is read-only")
+                return
+            end
+            rawset(t, key, value)
+        end
+    })
 end
 
 function mods.load_all(state)

@@ -83,6 +83,7 @@ Storms have about a 1/10 chance of happening, but the chance gets higher the fur
 
 * Built-in mod loader (terminal) with enable/disable and a lua repl because why not
 * Mods are loaded from `mods/` and can hook into runtime systems
+* `on_load(state, api)` gets `api.times_beaten`, how many times the game has been beaten (read-only, tamper-checked)
 
 ## Running the Game
 

@@ -206,6 +206,7 @@ function draw_steps.draw_background(state)
     water_shader:send("time", player_ship.time_system.time)
     water_shader:send("waterColor", {water_color[1], water_color[2], water_color[3]})
     water_shader:send("shoreY", state.system.shore.division)
+    water_shader:send("endShoreY", state.world.end_coast_y)
     water_shader:send("camera", {camera.x, camera.y})
     water_shader:send("resolution", {size.CANVAS_WIDTH, size.CANVAS_HEIGHT})
     local wave_intensity = 1.0
@@ -250,6 +251,22 @@ function draw_steps.draw_shore(state)
             love.graphics.setShader()
         end
     end
+end
+
+-- the far coastline is the starting shore flipped upside down: land below the waterline instead of above
+function draw_steps.draw_end_shore(state)
+    local end_y = state.world.end_coast_y
+    local camera = state.system.camera
+    local view_height = love.graphics.getHeight() / camera.scale
+    if camera.y + view_height < end_y - 400 or camera.y > end_y + 1000 then
+        return
+    end
+
+    love.graphics.push()
+    love.graphics.translate(0, end_y + state.system.shore.division)
+    love.graphics.scale(1, -1)
+    draw_steps.draw_shore(state)
+    love.graphics.pop()
 end
 
 local function draw_enemy_in_combat(state, glow_intensity)
@@ -514,6 +531,7 @@ function draw_steps.draw_world(state)
     local debugOptions = state.system.ui.debug
 
     draw_steps.draw_shore(state)
+    draw_steps.draw_end_shore(state)
 
     if not player_ship.time_system.is_sleeping then
         storm.draw(state)
@@ -528,6 +546,7 @@ function draw_steps.draw_world(state)
         state.shop.module.draw_shops(state.system.camera)
         state.shop.module.draw_main_dock(state.shop.keeper)
         state.shop.keeper:draw()
+        state.end_coast:draw()
 
         local ambient_light = state.system.actions.get_ambient_light()
         local glow_intensity = math.max(0, 1 - ambient_light)
@@ -676,7 +695,8 @@ function draw_steps.draw_time_and_debug(state)
     state.system.ui.alert.draw(state.system.size)
     mobile_controls.hide_fish_button = false
 
-    if gamestate.get() == GameType.VOYAGE then
+    local ending_active = state.system.ui.ending.is_active()
+    if gamestate.get() == GameType.VOYAGE and not ending_active then
         local shop_module = state.shop.module
         local prompt_clicked = false
         local prompt_visible = false
@@ -686,7 +706,8 @@ function draw_steps.draw_time_and_debug(state)
         local sleep_target_time = day_length - (day_length / (12 * 60)) -- 11:59
         local can_disembark_main = shop_module.can_disembark_main_dock and shop_module.can_disembark_main_dock(player_ship, state.shop.keeper)
         local can_disembark_port = shop_module.can_disembark_port_shop and shop_module.can_disembark_port_shop(player_ship)
-        if not player_ship.is_on_foot and (can_disembark_main or can_disembark_port) then
+        local can_dock_end = state.end_coast:can_dock(player_ship)
+        if not player_ship.is_on_foot and (can_disembark_main or can_disembark_port or can_dock_end) then
             prompt_visible = true
             prompt_clicked = action_display.drawKeyPrompt("F", "Dock and get out", action_prompt_center_x, action_prompt_center_y)
         elseif player_ship.is_on_foot then
@@ -904,6 +925,7 @@ function draw_steps.draw_final_ui(state)
     end
 
     love.graphics.setColor(1, 1, 1, 1)
+    state.system.ui.ending.draw(state)
     state.system.ui.suit.draw()
 
     if time_system.is_sleeping and time_system.fade_alpha > 0.9 then

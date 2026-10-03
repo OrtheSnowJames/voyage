@@ -21,6 +21,8 @@ local extra_math = require("game.extra_math")
 local update_steps = require("game.update_steps")
 local draw_steps = require("game.draw_steps")
 local shopkeeper_factory = require("game.shopkeeper")
+local end_coast_factory = require("game.end_coast")
+local ending = require("game.ending")
 local constants = require("game.constants")
 local state_factory = require("game.state")
 local mods = require("game.mods")
@@ -89,6 +91,7 @@ state.system = {
     hunger = hunger,
     crew_management = crew_management,
     alert = alert,
+    ending = ending,
     mods = mods,
     -- grouped alias kept for backward compatibility
     modules = {
@@ -145,7 +148,8 @@ state.ui = {
     suit = suit,
     morningtext = morningtext,
     alert = alert,
-    wake_up = wake_up
+    wake_up = wake_up,
+    ending = ending
 }
 state.actions = {}
 state.mods = {
@@ -294,6 +298,21 @@ local shopkeeper = shopkeeper_factory.create({
 })
 state.shop.keeper = shopkeeper
 
+-- the far coastline: one level past the last level that unlocks fish
+state.world.end_coast_y = fishing.get_end_coast_y()
+local end_coast = end_coast_factory.create({
+    constants = constants,
+    camera = camera,
+    player_ship = player_ship,
+    size = size,
+    get_y = function()
+        return state.world.end_coast_y
+    end
+})
+state.end_coast = end_coast
+state.system.end_coast = end_coast
+spawnenemy.set_end_coast_y(state.world.end_coast_y, constants.end_coast.enemy_safe_distance)
+
 reset_cheating_state = function()
     player_ship.rainbows = 0
     player_ship.corruption_started = false
@@ -351,6 +370,8 @@ local function reset_game(keep_days)
     player_ship.dock_walk_max_side = nil
     player_ship.dock_walk_max_up = nil
     player_ship.dock_walk_max_down = nil
+    player_ship.reached_end_coast = false
+    game_config.fishing_cooldown = constants.config.fishing_cooldown
     player_ship.rod = "Basic Rod"
     player_ship.sword = "Basic Sword"
     player_ship.caught_fish = {}
@@ -380,6 +401,8 @@ local function reset_game(keep_days)
     shopkeeper.x = 0
     shopkeeper.y = shore_division - 16
     shopkeeper.is_spawned = false
+    end_coast:reset()
+    ending.reset()
 
     -- reset special fish event
     special_fish_event.active = false
@@ -485,6 +508,10 @@ function player_ship:update(dt)
         GameType = GameType,
         normalize_rainbows = game.normalize_rainbows,
         shore_division = shore_division,
+        end_coast_y = state.world.end_coast_y,
+        end_boat_min_distance = constants.end_coast.boat_min_distance,
+        end_swim_min_distance = constants.end_coast.swim_min_distance,
+        end_shoreline_walk_offset_y = constants.end_coast.shoreline_walk_offset_y,
         on_foot_speed = ON_FOOT_SPEED,
         on_foot_max_walk_up = on_foot_max_walk_up,
         on_foot_max_walk_side = on_foot_max_walk_side,
@@ -570,6 +597,10 @@ function game.get_required_depth_for_fish(fish_name)
     local fish_value = fishing.get_fish_value(fish_name)
     if fish_value == 100000 then
         return nil -- gold sturgeon is handled by the time rule below.
+    end
+
+    if fishing.is_night_fish and fishing.is_night_fish(fish_name) then
+        return nil -- night fish can show up at any depth, and their value is not a depth level
     end
 
     if fish_value <= REGULAR_FISH_COUNT then
@@ -733,6 +764,7 @@ function game.get_saveable_data()
             data[k] = v
         end
     end
+    data.fishing_cooldown = game_config.fishing_cooldown
     -- add shop data
     data.shop_data = shop.get_port_a_shops_data()
     return data
@@ -789,6 +821,15 @@ function game.load()
         serialize.save_data(game.get_saveable_data())
     end
 
+    -- the cooldown upgrades live in game_config, not on the ship; older saves never stored them
+    local saved_cooldown = tonumber(player_ship.fishing_cooldown)
+    if saved_cooldown then
+        game_config.fishing_cooldown = math.max(1.0, math.min(constants.config.fishing_cooldown, saved_cooldown))
+    else
+        game_config.fishing_cooldown = constants.config.fishing_cooldown
+    end
+    player_ship.fishing_cooldown = nil
+
     -- migration defaults for older saves
     player_ship.caught_fish = player_ship.caught_fish or {}
     player_ship.inventory = player_ship.inventory or {}
@@ -832,7 +873,10 @@ function game.load()
     if player_ship.docked_port_shop_index then
         player_ship.docked_port_shop_index = math.max(1, math.floor(player_ship.docked_port_shop_index))
     end
-    player_ship.dock_walk_mode = (player_ship.dock_walk_mode == "island") and "island" or "shore"
+    if player_ship.dock_walk_mode ~= "island" and player_ship.dock_walk_mode ~= "end_coast" then
+        player_ship.dock_walk_mode = "shore"
+    end
+    player_ship.reached_end_coast = player_ship.reached_end_coast == true
     player_ship.dock_walk_island_radius = tonumber(player_ship.dock_walk_island_radius)
     player_ship.dock_walk_dock_half_width = tonumber(player_ship.dock_walk_dock_half_width)
     player_ship.dock_walk_dock_height = tonumber(player_ship.dock_walk_dock_height)
@@ -878,7 +922,7 @@ function game.load()
     detect_cheating()
     morningtext.start(player_ship.rainbows)
     mods.run_hook("on_game_load", state)
-    glitch_screen = love.load("assets/glitch.png")
+    glitch_screen = love.graphics.newImage("assets/glitch.png")
 end
 
 -- ship animation
@@ -1063,6 +1107,10 @@ state.actions.force_corruption_sleep_if_needed = force_corruption_sleep_if_neede
 
 -- handle key presses in the game
 function game.keypressed(key)
+    if ending.keypressed(key) then
+        return
+    end
+
     if days.keypressed(key) then
         return
     end
@@ -1071,6 +1119,15 @@ function game.keypressed(key)
         local function consume_f_press_for_fishing()
             if state and state.fishing and state.fishing.runtime and state.fishing.runtime.block_fishing_until_release then
                 state.fishing.runtime.block_fishing_until_release()
+            end
+        end
+
+        if not player_ship.is_on_foot then
+            if end_coast:try_dock(player_ship) then
+                consume_f_press_for_fishing()
+                print("You dock at the far coast. The voyage is over.")
+                ending.start(player_ship)
+                return
             end
         end
 
@@ -1118,6 +1175,13 @@ function game.keypressed(key)
 end
 
 function game.update(dt)
+    if ending.is_active() then
+        -- the voyage is over: time stands still while Jonas talks
+        alert.update(dt)
+        wake_up.update(dt)
+        return ending.update(dt, state)
+    end
+
     force_corruption_sleep_if_needed()
     update_steps.day_night_cycle(dt, state)
     days.sample(state)
@@ -1174,7 +1238,7 @@ end
 
 function drawGlitch(state)
     local player = state.system.player
-    if not state.player.rainbows > 0 then return end
+    if not (state.player.rainbows > 0) then return end
 
     local max_fishing_level = state.fishing.max_level - 2 -- so the glitch happens way before
     local max_fishing_level_y = constants.fishing_level * max_fishing_level

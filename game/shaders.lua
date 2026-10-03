@@ -22,6 +22,7 @@ function shaders.create()
     extern number time;
     extern vec3 waterColor;
     extern number shoreY;
+    extern number endShoreY;
     extern vec2 camera;
     extern vec2 resolution;
     extern number waveIntensity;
@@ -124,6 +125,21 @@ function shaders.create()
                 final_color.r = mix(final_color.r, 0.9, foam_intensity);
                 final_color.g = mix(final_color.g, 0.9, foam_intensity);
                 final_color.b = mix(final_color.b, 1.0, foam_intensity);
+            }
+        }
+
+        // the far coastline foams the same way, mirrored: land is below endShoreY
+        float dist_to_end_shore = (endShoreY - 40.0) - world_y;
+        if (dist_to_end_shore < 50.0 && dist_to_end_shore > 0.0) {
+            float end_foam_factor = 1.0 - (dist_to_end_shore / 50.0);
+            float end_foam_noise = noise(vec2(world_x / 30.0 + time * 0.2, time * 0.1));
+
+            if (end_foam_noise > 0.65) {
+                float end_foam_intensity = smoothstep(0.65, 0.8, end_foam_noise) * end_foam_factor;
+
+                final_color.r = mix(final_color.r, 0.9, end_foam_intensity);
+                final_color.g = mix(final_color.g, 0.9, end_foam_intensity);
+                final_color.b = mix(final_color.b, 1.0, end_foam_intensity);
             }
         }
 

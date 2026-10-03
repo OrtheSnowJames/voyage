@@ -1,6 +1,7 @@
 local menu = {}
 local suit = require "SUIT"
 local serialize = require("game.serialize")
+local times_beaten = require("game.times_beaten")
 local size = require("game.size")
 local extra_math = require("game.extra_math")
 local WEB_QUIT_REDIRECT_URL = "http://waffledogz.us"
@@ -263,6 +264,10 @@ function menu.draw()
     
     love.graphics.setFont(oldFont)
     
+    -- times the game has been beaten, top left
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.print("Times beaten: " .. times_beaten.get(), 12, 10)
+
     -- draw ui
     suit.draw()
 end

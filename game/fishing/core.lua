@@ -155,6 +155,11 @@ function core.create(deps)
         return math.max(1, #fish - (FISH_WINDOW_SIZE - 1))
     end
 
+    -- where the voyage ends: the far coastline sits one level past the last level that unlocks fish
+    function fishing.get_end_coast_y()
+        return (fishing.get_max_fish_level() + 1) * FISHING_LEVEL
+    end
+
     function fishing.get_fish_available(x, y, game_time)
         if corruption_level >= 0.3 then
             print("The water remembers..")
