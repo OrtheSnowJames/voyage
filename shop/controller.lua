@@ -20,6 +20,7 @@ local PORT_EXPORTS = {
     "can_talk_to_port_shopkeeper",
     "request_port_shop_interaction",
     "has_shop_collision_at_y",
+    "can_add_port_a_shop",
     "draw_main_dock",
     "resolve_boat_collisions",
     "resolve_enemy_collisions",

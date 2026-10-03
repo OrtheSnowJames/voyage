@@ -90,6 +90,12 @@ local function is_dangerous_area(y)
     end
     
     local shop = require("shop")
+
+    -- once every level has its shop there is nothing left to buy, so the water below the last shop is safe
+    if shop.can_add_port_a_shop and not shop.can_add_port_a_shop() then
+        return false
+    end
+
     local last_shop_y = shop.get_last_port_a_shop_y()
 
     -- if the player's y is greater than the last shop's y (plus a buffer), it's dangerous.
