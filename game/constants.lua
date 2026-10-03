@@ -205,7 +205,8 @@ local constants = {
     },
     corruption = {
         start_value = 0.1,
-        step = 0.1
+        step = 0.1,
+        cheated_value = 0.5
     }
 }
 

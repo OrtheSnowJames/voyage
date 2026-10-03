@@ -319,6 +319,15 @@ function morningtext.draw(sys)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+-- true once the typewriter has finished revealing both lines
+function morningtext.is_fully_revealed()
+    if not state.active or not state.lines then
+        return false
+    end
+    local line1, line2 = get_revealed_lines()
+    return line1 == state.lines[1] and line2 == state.lines[2]
+end
+
 function morningtext.reset()
     state.active = false
     state.timer = 0

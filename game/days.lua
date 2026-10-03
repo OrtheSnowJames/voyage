@@ -208,6 +208,8 @@ end
 function days.next_day(state)
     days.sample(state) -- flush anything that changed since the last frame into the day that earned it
     local data = ensure()
+    -- stamp the closing day with how far the corruption has come, so the journal can mourn it
+    data.log[#data.log].rainbows_level = math.floor((tonumber(player_ship.rainbows) or 0) * 10 + 0.5)
     player_ship.days_passed = (tonumber(player_ship.days_passed) or 0) + 1
     data.log[#data.log + 1] = new_entry(player_ship.days_passed + 1)
     runtime.x = nil -- sleeping may move the ship to the dock
@@ -232,12 +234,26 @@ local function number_word(n)
     return NUMBER_WORDS[n] or tostring(n)
 end
 
+-- Jonas's only journal lines once the captain has cheated; one per rainbow level
+local CHEATED_NOTES = {
+    "Why did he do that...",
+    "I thought we were friends...",
+    "I still can't believe it...",
+    "The other guys agree...",
+    "Walk the plank!"
+}
+
 local function pick(entry, options)
     return options[(entry.number % #options) + 1]
 end
 
 -- the narrator's note for the day, written from the day's events and stats
 function days.get_commentary(entry)
+    local cheated_level = math.min(#CHEATED_NOTES, tonumber(entry.rainbows_level) or 0)
+    if cheated_level >= 1 then
+        return CHEATED_NOTES[cheated_level]
+    end
+
     local name = constants.ship.start_crew_name
     local lost = entry.men_lost or 0
     local notes = {}

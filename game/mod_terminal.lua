@@ -247,6 +247,12 @@ local function get_lua_env(term)
                 return nil
             end
 
+            if key == "quit" then
+                return function()
+                    love.event.quit()
+                end
+            end
+
             return _G[key]
         end
     })

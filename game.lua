@@ -1142,6 +1142,11 @@ function game.update(dt)
         return hunger_result
     end
 
+    local cheat_result = update_steps.cheat_ending(dt, state)
+    if cheat_result ~= nil then
+        return cheat_result or nil
+    end
+
     local rebellion_result = update_steps.rebellion(dt, state)
     if rebellion_result ~= nil then
         return rebellion_result or nil

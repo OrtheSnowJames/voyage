@@ -1,5 +1,6 @@
 local serialize = {}
 local save_tampered = false
+local saves_locked = false
 
 local function save_hash(str)
     local hash = 5381
@@ -138,6 +139,9 @@ local function do_deserialize(str)
 end
 
 function serialize.save_data(data)
+    if saves_locked then
+        return
+    end
     local serialized = do_serialize(data)
     love.filesystem.write("save.lua", serialized)
     love.filesystem.write("save.sig", save_hash(serialized))
@@ -170,6 +174,17 @@ function serialize.load_data(options)
     end
     save_tampered = false
     return nil
+end
+
+-- while locked, save_data is a no-op so nothing can rewrite a wiped save
+function serialize.set_locked(locked)
+    saves_locked = locked == true
+end
+
+function serialize.wipe_save()
+    love.filesystem.remove("save.lua")
+    love.filesystem.remove("save.sig")
+    save_tampered = false
 end
 
 function serialize.was_tampered()

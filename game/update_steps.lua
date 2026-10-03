@@ -4,6 +4,9 @@ local time_utils = require("game.time_utils")
 local storm = require("game.storm")
 local days = require("game.days")
 local REBELLION_DURATION = 5 -- seconds the mutiny message shows before the run resets
+local CHEAT_TITLE_DELAY = 3 -- seconds after the morning text finishes typing before "YOU CHEATED."
+local CHEAT_TITLE_DURATION = 6
+local CHEAT_FADE_DURATION = 3
 local RECOVERY_BAY_MAX = constants.combat.recovery_bay_max or 15
 
 local function clear_catch_texts(state)
@@ -128,6 +131,12 @@ function update_steps.sleep_fade_state(dt, state)
                     time_system.fade_timer = 0
                     gamestate.set(GameType.VOYAGE)
                     state.system.ui.morningtext.start(player_ship.rainbows)
+                    if state.system.game.normalize_rainbows(player_ship.rainbows) >= constants.corruption.cheated_value then
+                        -- the crew knows: lock saves now so the wake-up save can't persist this day
+                        state.system.serialize.set_locked(true)
+                        state.cheat_ending = {timer = 0, revealed = false, wiped = false}
+                        return
+                    end
                     days.show_recap()
                     if state.system.ui.wake_up and state.system.ui.wake_up.start then
                         state.system.ui.wake_up.start()
@@ -170,6 +179,49 @@ function update_steps.rebellion(dt, state)
         state.system.actions.reset_game()
         gamestate.set(GameType.MENU)
         return GameType.MENU
+    end
+    return false
+end
+
+-- caught cheating: after the morning text, "YOU CHEATED." appears and the save is wiped on the spot,
+-- then the screen fades to black and the run resets.
+-- returns nil when nothing is happening, false while the ending plays, GameType.MENU once the run is over
+function update_steps.cheat_ending(dt, state)
+    local ending = state.cheat_ending
+    if not ending then
+        return nil
+    end
+
+    local gamestate = state.system.gamestate
+    local GameType = state.system.gametype
+    local time_system = state.system.player.time_system
+
+    -- the clock starts once the last corrupted line has fully appeared
+    if not ending.revealed and state.system.ui.morningtext.is_fully_revealed() then
+        ending.revealed = true
+    end
+    if ending.revealed then
+        ending.timer = ending.timer + dt
+    end
+    if not ending.wiped and ending.revealed and ending.timer >= CHEAT_TITLE_DELAY then
+        ending.wiped = true
+        state.system.alert.title("YOU CHEATED.", CHEAT_TITLE_DURATION, {1, 0.15, 0.15, 1}, 0.3, 1)
+        -- wipe directly instead of via reset_game, which mods can override
+        state.system.serialize.wipe_save()
+    end
+
+    if ending.wiped then
+        time_system.fade_alpha = math.max(0, math.min(1, (ending.timer - CHEAT_TITLE_DELAY) / CHEAT_FADE_DURATION))
+        if time_system.fade_alpha >= 1 then
+            state.cheat_ending = nil
+            time_system.fade_alpha = 0
+            state.system.alert.clear()
+            state.system.actions.reset_game()
+            state.system.serialize.wipe_save()
+            state.system.serialize.set_locked(false)
+            gamestate.set(GameType.MENU)
+            return GameType.MENU
+        end
     end
     return false
 end
