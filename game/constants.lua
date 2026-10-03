@@ -218,6 +218,7 @@ local constants = {
         house_side_offset_x = 110,
         house_land_offset_y = 100,
         house_scale = 2,
+        house_collision_padding = 10, -- keeps the captain's sprite from overlapping the walls
         enemy_safe_distance = 150 -- no enemies spawn this close to the far coast
     },
     corruption = {

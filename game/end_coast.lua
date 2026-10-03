@@ -6,6 +6,8 @@ local end_coast_factory = {}
 local HOUSE_PATH = "assets/house.png"
 local SPAWN_DISTANCE = 200
 local VIEW_MARGIN = 250
+-- the opaque part of house.png (the top rows are empty); in image pixels
+local HOUSE_SOLID = {x = 0, y = 9, w = 64, h = 55}
 
 function end_coast_factory.create(deps)
     local C = deps.constants.end_coast
@@ -97,6 +99,25 @@ function end_coast_factory.create(deps)
         ship.dock_walk_max_up = C.walk_max_depth -- how far inland the captain can walk
         ship.dock_walk_max_down = nil
         return true
+    end
+
+    -- where the house is, as a world rectangle for on-foot collision; nil while the coast is not spawned
+    function coast:get_house_rect()
+        if not self.is_spawned then
+            return nil
+        end
+
+        local scale = C.house_scale
+        local image_w = house_image:getWidth()
+        local image_h = house_image:getHeight()
+        local center_y = self:get_y() + C.house_land_offset_y
+        local pad = C.house_collision_padding
+        return {
+            x = self.x - (image_w / 2 - HOUSE_SOLID.x) * scale - pad,
+            y = center_y - (image_h / 2 - HOUSE_SOLID.y) * scale - pad,
+            w = HOUSE_SOLID.w * scale + pad * 2,
+            h = HOUSE_SOLID.h * scale + pad * 2
+        }
     end
 
     function coast:draw_dock()

@@ -509,6 +509,9 @@ function player_ship:update(dt)
         normalize_rainbows = game.normalize_rainbows,
         shore_division = shore_division,
         end_coast_y = state.world.end_coast_y,
+        get_house_rect = function()
+            return end_coast:get_house_rect()
+        end,
         end_boat_min_distance = constants.end_coast.boat_min_distance,
         end_swim_min_distance = constants.end_coast.swim_min_distance,
         end_shoreline_walk_offset_y = constants.end_coast.shoreline_walk_offset_y,

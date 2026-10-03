@@ -153,6 +153,28 @@ function movement_steps.update_player_ship(self, dt, ctx)
         self.on_foot_x = math.max(min_x, math.min(max_x, self.on_foot_x))
         self.on_foot_y = math.max(min_y, math.min(max_y, self.on_foot_y))
 
+        -- solid obstacles on land (the far coast's house): push the captain out through the nearest edge
+        local house = ctx.get_house_rect and ctx.get_house_rect()
+        if house then
+            local px, py = self.on_foot_x, self.on_foot_y
+            if px > house.x and px < house.x + house.w and py > house.y and py < house.y + house.h then
+                local to_left = px - house.x
+                local to_right = house.x + house.w - px
+                local to_top = py - house.y
+                local to_bottom = house.y + house.h - py
+                local nearest = math.min(to_left, to_right, to_top, to_bottom)
+                if nearest == to_top then
+                    self.on_foot_y = house.y
+                elseif nearest == to_bottom then
+                    self.on_foot_y = house.y + house.h
+                elseif nearest == to_left then
+                    self.on_foot_x = house.x
+                else
+                    self.on_foot_x = house.x + house.w
+                end
+            end
+        end
+
         -- Port island mode: allow only island circle and dock plank, never free water.
         local island_radius = tonumber(ctx.foot_island_radius)
         if island_radius and island_radius > 0 and dock_x and dock_bottom_y then
