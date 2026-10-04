@@ -23,6 +23,7 @@ local draw_steps = require("game.draw_steps")
 local shopkeeper_factory = require("game.shopkeeper")
 local end_coast_factory = require("game.end_coast")
 local ending = require("game.ending")
+local dialogue = require("game.dialogue")
 local constants = require("game.constants")
 local state_factory = require("game.state")
 local mods = require("game.mods")
@@ -92,6 +93,7 @@ state.system = {
     crew_management = crew_management,
     alert = alert,
     ending = ending,
+    dialogue = dialogue,
     mods = mods,
     -- grouped alias kept for backward compatibility
     modules = {
@@ -149,7 +151,8 @@ state.ui = {
     morningtext = morningtext,
     alert = alert,
     wake_up = wake_up,
-    ending = ending
+    ending = ending,
+    dialogue = dialogue
 }
 state.actions = {}
 state.mods = {
@@ -403,6 +406,7 @@ local function reset_game(keep_days)
     shopkeeper.is_spawned = false
     end_coast:reset()
     ending.reset()
+    dialogue.reset()
 
     -- reset special fish event
     special_fish_event.active = false
@@ -1110,7 +1114,7 @@ state.actions.force_corruption_sleep_if_needed = force_corruption_sleep_if_neede
 
 -- handle key presses in the game
 function game.keypressed(key)
-    if ending.keypressed(key) then
+    if ending.keypressed(key) or dialogue.keypressed(key) then
         return
     end
 
@@ -1183,6 +1187,14 @@ function game.update(dt)
         alert.update(dt)
         wake_up.update(dt)
         return ending.update(dt, state)
+    end
+
+    if dialogue.is_active() then
+        -- someone is talking: the world waits
+        alert.update(dt)
+        wake_up.update(dt)
+        dialogue.update(dt)
+        return nil
     end
 
     force_corruption_sleep_if_needed()

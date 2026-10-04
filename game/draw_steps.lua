@@ -695,7 +695,7 @@ function draw_steps.draw_time_and_debug(state)
     state.system.ui.alert.draw(state.system.size)
     mobile_controls.hide_fish_button = false
 
-    local ending_active = state.system.ui.ending.is_active()
+    local ending_active = state.system.ui.ending.is_active() or state.system.ui.dialogue.is_active()
     if gamestate.get() == GameType.VOYAGE and not ending_active then
         local shop_module = state.shop.module
         local prompt_clicked = false
@@ -926,6 +926,7 @@ function draw_steps.draw_final_ui(state)
 
     love.graphics.setColor(1, 1, 1, 1)
     state.system.ui.ending.draw(state)
+    state.system.ui.dialogue.draw(state)
     state.system.ui.suit.draw()
 
     if time_system.is_sleeping and time_system.fade_alpha > 0.9 then

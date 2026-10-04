@@ -3,6 +3,7 @@ local main_ui = require("shop.ui.main")
 local transfer_ui = require("shop.ui.transfer")
 local inventory_ui = require("shop.ui.inventory")
 local top_bar = require("game.top")
+local dialogue = require("game.dialogue")
 
 local controller = {}
 
@@ -40,6 +41,7 @@ function controller.create(deps)
 
     local runtime_state = shop_state.create(scrolling)
     local shop = {}
+    local open_shopkeeper = 1 -- which shopkeeper's shop is open, as numbered in shopkeeper_dialogue.lua
 
     for _, method_name in ipairs(PORT_EXPORTS) do
         shop[method_name] = port[method_name]
@@ -98,10 +100,12 @@ function controller.create(deps)
             if player_ship.pending_shop_interaction and (main_shop_active or port_shop_active) then
                 gamestate.set(GameType.SHOP)
                 player_ship.pending_shop_interaction = false
+                open_shopkeeper = port_shop_active and ((tonumber(player_ship.docked_port_shop_index) or 0) + 1) or 1
             end
         elseif not shop_active and gamestate.get():find(GameType.SHOP, 1, true) then
             player_ship.pending_shop_interaction = false
             gamestate.set(GameType.VOYAGE)
+            dialogue.start_shopkeeper(open_shopkeeper)
         end
 
         if not gamestate.get():find(GameType.SHOP, 1, true) then
@@ -122,6 +126,7 @@ function controller.create(deps)
 
         if suit.Button("Leave Shop", {id = "leave_shop"}, window_width - 132, top_offset + 10, 122, 30).hit then
             gamestate.set(GameType.VOYAGE)
+            dialogue.start_shopkeeper(open_shopkeeper)
             runtime_state.shop_reopen_requires_exit = true
             player_ship.pending_shop_interaction = false
             scrolling.stop_drag(runtime_state.main_shop_scroll)

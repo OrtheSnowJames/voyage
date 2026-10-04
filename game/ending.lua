@@ -6,6 +6,8 @@ local constants = require("game.constants")
 local size = require("game.size")
 local times_beaten = require("game.times_beaten")
 local morningtext = require("game.morningtext")
+local days = require("game.days")
+local dialogue = require("game.dialogue")
 
 local LINES = {
     "Wow, dude! Can't believe we made it!",
@@ -14,9 +16,6 @@ local LINES = {
 }
 local TYPEWRITER_CHARS_PER_SECOND = 30
 local FADE_DURATION = 2.5
-local TEXT_SCALE = 1.6
-local PANEL_HEIGHT = 110
-local PANEL_MARGIN = 20
 local BUTTON_WIDTH = 200
 local BUTTON_HEIGHT = 40
 
@@ -42,6 +41,9 @@ end
 function ending.start(player_ship)
     local seen_before = player_ship.reached_end_coast == true
     player_ship.reached_end_coast = true
+    if not seen_before then
+        days.record_voyage_complete()
+    end
     morningtext.reset() -- don't let a leftover morning line show through the dialogue
     run = {
         line = seen_before and #LINES or 1,
@@ -127,33 +129,15 @@ function ending.update(dt, state)
 end
 
 function ending.draw(state)
-    if not run then
+    if not run or run.completing then
         return
     end
 
     local suit = state.system.ui.suit
-    local panel_x = PANEL_MARGIN
-    local panel_y = size.CANVAS_HEIGHT - PANEL_HEIGHT - PANEL_MARGIN
-    local panel_w = size.CANVAS_WIDTH - PANEL_MARGIN * 2
-
-    if not run.completing then
-        love.graphics.setColor(0, 0, 0, 0.75)
-        love.graphics.rectangle("fill", panel_x, panel_y, panel_w, PANEL_HEIGHT)
-        love.graphics.setColor(1, 1, 1, 0.9)
-        love.graphics.rectangle("line", panel_x, panel_y, panel_w, PANEL_HEIGHT)
-
-        love.graphics.setColor(1, 0.85, 0.3, 1)
-        love.graphics.print(constants.ship.start_crew_name, panel_x + 16, panel_y + 10, 0, TEXT_SCALE, TEXT_SCALE)
-
-        local shown = LINES[run.line]:sub(1, math.floor(run.reveal))
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.print(shown, panel_x + 16, panel_y + 44, 0, TEXT_SCALE, TEXT_SCALE)
-    end
-    love.graphics.setColor(1, 1, 1, 1)
-
-    if run.completing then
-        return
-    end
+    local panel_x, panel_y, panel_w, panel_h = dialogue.draw_panel(
+        constants.ship.start_crew_name,
+        LINES[run.line]:sub(1, math.floor(run.reveal))
+    )
 
     if on_last_line() and line_is_fully_shown() then
         local gap = 20
@@ -167,7 +151,7 @@ function ending.draw(state)
             keep_exploring()
         end
     elseif not on_last_line() then
-        if suit.Button("Next", {id = "ending_next"}, panel_x + panel_w - 110, panel_y + PANEL_HEIGHT - 46, 96, 34).hit then
+        if suit.Button("Next", {id = "ending_next"}, panel_x + panel_w - 110, panel_y + panel_h - 46, 96, 34).hit then
             ending.advance()
         end
     end

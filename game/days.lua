@@ -134,6 +134,14 @@ function days.record_enemy_defeated()
     entry.enemies_defeated = (entry.enemies_defeated or 0) + 1
 end
 
+-- docking at the far coast beats the game; the page for that day says so (once per voyage)
+function days.record_voyage_complete()
+    ensure()
+    if not has_event(current(), "voyage_end") then
+        add_event("Reached the far coast!", true, "voyage_end")
+    end
+end
+
 function days.record_shipwreck()
     add_event("Shipwrecked in a thunderstorm!", true, "shipwreck")
 end
@@ -257,6 +265,10 @@ function days.get_commentary(entry)
     local name = constants.ship.start_crew_name
     local lost = entry.men_lost or 0
     local notes = {}
+
+    if has_event(entry, "voyage_end") then
+        notes[#notes + 1] = "We made it. Solid ground at last, and my own front door right there. I never thought I'd see it."
+    end
 
     if has_event(entry, "shipwreck") then
         if lost > 0 then
