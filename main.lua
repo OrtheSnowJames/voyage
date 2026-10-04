@@ -119,6 +119,7 @@ function love.update(dt)
                 -- store ship name before transitioning to game
                 if next_state_str == "game" then
                     ship_name = menu.get_ship_name()
+                    game.load_save()
                     gamestate.set(GameType.VOYAGE)
                 else
                     gamestate.set(next_state_str)

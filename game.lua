@@ -23,6 +23,7 @@ local draw_steps = require("game.draw_steps")
 local shopkeeper_factory = require("game.shopkeeper")
 local end_coast_factory = require("game.end_coast")
 local ending = require("game.ending")
+local storm = require("game.storm")
 local dialogue = require("game.dialogue")
 local constants = require("game.constants")
 local state_factory = require("game.state")
@@ -326,10 +327,8 @@ reset_cheating_state = function()
     spawnenemy.set_corruption_state(0, 0)
 end
 
-local function reset_game(keep_days)
-    -- delete save file
-    love.filesystem.remove("save.lua")
-
+-- puts everything in memory back to a fresh game; the save file is left alone
+local function reset_runtime_state(keep_days)
     if not keep_days then
         days.reset()
     end
@@ -429,7 +428,19 @@ local function reset_game(keep_days)
     last_player_ripple_pos.x = player_ship.x
     last_player_ripple_pos.y = player_ship.y
 
+    -- leftovers from the run that was just on screen
+    state.rebellion = nil
+    state.cheat_ending = nil
+    storm.force_stop(state)
+    storm.set_audio_volume_multiplier(1)
+
     morningtext.reset()
+end
+
+-- wipes the run: delete the save file, then reset everything in memory
+local function reset_game(keep_days)
+    serialize.wipe_save()
+    reset_runtime_state(keep_days)
 end
 
 local function reset_after_shipwreck_landfall()
@@ -777,33 +788,9 @@ function game.get_saveable_data()
     return data
 end
 
-function game.load()
-    -- check if mobile
-    on_mobile = false
-    on_web = false
-    local os = love.system.getOS()
-    if os == 'iOS' or os == 'Android' then
-        on_mobile = true
-        print("mobile")
-    elseif os == 'Web' then
-        on_web = true
-        print("web")
-    else
-        print("not on web or mobile")
-    end
-    anti_cheat_enabled = not (on_mobile or os == "Web")
-
-    mobile_controls.enabled = on_mobile
-
-    mods.load_all(state)
-    wake_up.load()
-    wake_up.stop()
-    state.mods.count = mods.count()
-    state.mods.active = state.mods.count > 0
-    if state.mods.active then
-        print(string.format("Loaded %d mod(s)", state.mods.count))
-    end
-
+-- reads save.lua into the (freshly reset) state, or starts a new save if there is none.
+-- Runs at startup and every time the player presses Play, so the menu never leaves stale state behind.
+local function load_save()
     local saved_data = serialize.load_data({
         allow_tampered = true
     })
@@ -917,6 +904,14 @@ function game.load()
         serialize.save_data(game.get_saveable_data())
     end
 
+    -- an edited save gets the rainbows; game.update then forces the first sleep, same as any other cheat
+    if (tampered_this_load or player_ship.save_file_tampered) and anti_cheat_enabled
+        and player_ship.rainbows < RAINBOWS_START_VALUE then
+        player_ship.rainbows = RAINBOWS_START_VALUE
+        print("Edited save file: lollipops and rainbows headed your way!")
+        serialize.save_data(game.get_saveable_data())
+    end
+
     if state.fishing.runtime then
         state.fishing.runtime.reset_state()
     end
@@ -929,7 +924,37 @@ function game.load()
     detect_cheating()
     morningtext.start(player_ship.rainbows)
     mods.run_hook("on_game_load", state)
+end
+
+function game.load()
+    -- check if mobile
+    on_mobile = false
+    on_web = false
+    local os = love.system.getOS()
+    if os == 'iOS' or os == 'Android' then
+        on_mobile = true
+        print("mobile")
+    elseif os == 'Web' then
+        on_web = true
+        print("web")
+    else
+        print("not on web or mobile")
+    end
+    anti_cheat_enabled = not (on_mobile or os == "Web")
+
+    mobile_controls.enabled = on_mobile
+
+    mods.load_all(state)
+    wake_up.load()
+    wake_up.stop()
+    state.mods.count = mods.count()
+    state.mods.active = state.mods.count > 0
+    if state.mods.active then
+        print(string.format("Loaded %d mod(s)", state.mods.count))
+    end
+
     glitch_screen = love.graphics.newImage("assets/glitch.png")
+    load_save()
 end
 
 -- ship animation
@@ -1110,6 +1135,7 @@ state.actions.get_current_water_color = getCurrentWaterColor
 state.actions.get_ambient_light = getAmbientLight
 state.actions.draw_ship_glow = drawShipGlow
 state.actions.draw_mobile_controls = draw_mobile_controls
+state.actions.reset_runtime_state = reset_runtime_state
 state.actions.force_corruption_sleep_if_needed = force_corruption_sleep_if_needed
 
 -- handle key presses in the game
@@ -1277,6 +1303,11 @@ end
 -- make player_ship accessible to other modules
 game.player_ship = player_ship
 game.reset_state = reset_game
+-- clean slate first, so nothing from whatever was loaded before (another slot, say) survives into this save
+function game.load_save()
+    reset_runtime_state()
+    load_save()
+end
 
 -- make mobile control functions accessible to other modules
 game.handle_mobile_button_press = handle_mobile_button_press

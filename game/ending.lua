@@ -4,7 +4,6 @@ local ending = {}
 
 local constants = require("game.constants")
 local size = require("game.size")
-local times_beaten = require("game.times_beaten")
 local morningtext = require("game.morningtext")
 local days = require("game.days")
 local dialogue = require("game.dialogue")
@@ -20,9 +19,14 @@ local BUTTON_WIDTH = 200
 local BUTTON_HEIGHT = 40
 
 local run = nil
+local on_complete = nil -- the menu registers this; it counts the win in the persistent state
 
 local function line_length(index)
     return #LINES[index]
+end
+
+function ending.set_on_complete(callback)
+    on_complete = callback
 end
 
 function ending.reset()
@@ -93,7 +97,9 @@ local function complete_voyage()
     run.fade = 0
     if not run.counted then
         run.counted = true
-        times_beaten.increment()
+        if on_complete then
+            on_complete()
+        end
     end
 end
 

@@ -1,5 +1,4 @@
 local mods = {}
-local times_beaten = require("game.times_beaten")
 
 local loaded_mods = {}
 local mods_enabled = true
@@ -72,11 +71,11 @@ local function make_api()
             print("[mod]", ...)
         end
     }
-    -- api.times_beaten is read live from the signed record and is read-only
+    -- api.times_beaten is read live from the menu's persistent state and is read-only
     return setmetatable(api, {
         __index = function(_, key)
             if key == "times_beaten" then
-                return times_beaten.get()
+                return require("menu").get_times_beaten()
             end
         end,
         __newindex = function(t, key, value)

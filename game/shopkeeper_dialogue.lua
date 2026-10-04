@@ -242,7 +242,7 @@ return {
         name = "Shopkeeper",
         lines = {
             "Welp, your journey is coming to an end.",
-            "Please! End your voyage and fight with your Jonas!",
+            "Please! End your voyage and fight with Jonas!",
             "Exploring is meaningless!"
         }
     },

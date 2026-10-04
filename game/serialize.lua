@@ -1,13 +1,44 @@
 local serialize = {}
 local save_tampered = false
 local saves_locked = false
+local current_slot = nil   -- which save slot the game is playing in; every save is mirrored into it
+local current_prefix = ""
 
-local function save_hash(str)
+-- keyed hash secret: this is deterrence, not security, since the game ships its own source
+local SIGNING_SECRET = "v0yage-0f-the-b34ten-0nes"
+
+-- the weak checksum older saves were signed with; only used to recognise them and re-sign them
+local function legacy_save_hash(str)
     local hash = 5381
     for i = 1, #str do
         hash = (hash * 33 + str:byte(i)) % 4294967296
     end
     return string.format("%08x", hash)
+end
+
+local function to_hex(raw)
+    return (raw:gsub(".", function(c)
+        return string.format("%02x", c:byte())
+    end))
+end
+
+local function save_hash(str)
+    return to_hex(love.data.hash("sha256", SIGNING_SECRET .. "|save|" .. str .. "|" .. SIGNING_SECRET:reverse()))
+end
+
+-- A save is only tampered with if it carries a signature that does not match it. A file with no signature at
+-- all was simply added (a dropped-in save, a playtest save), so it is trusted and gets signed on load.
+local function signature_matches(content, signature)
+    if not signature then
+        return true
+    end
+    signature = signature:gsub("%s+$", "")
+    return signature == save_hash(content) or signature == legacy_save_hash(content)
+end
+
+-- the signature file that goes with a data file: save.lua -> save.sig
+local function sig_path_for(lua_path)
+    return (lua_path:gsub("%.lua$", ".sig"))
 end
 
 --[[
@@ -109,9 +140,12 @@ local function do_deserialize(str)
     if loadstring then
         -- Lua 5.1 / LuaJIT path.
         chunk, err = loadstring(source)
+        if chunk and setfenv then
+            setfenv(chunk, {}) -- the file may only describe data; an edited save must not be able to run code
+        end
     else
         -- Lua 5.2+ path.
-        local ok, result = pcall(load, source)
+        local ok, result = pcall(load, source, "=save", "t", {})
         if ok and type(result) == "function" then
             chunk = result
         else
@@ -145,7 +179,18 @@ function serialize.save_data(data)
     local serialized = do_serialize(data)
     love.filesystem.write("save.lua", serialized)
     love.filesystem.write("save.sig", save_hash(serialized))
+    if current_slot then
+        local slot_path = current_prefix .. current_slot .. ".lua"
+        love.filesystem.write(slot_path, serialized)
+        love.filesystem.write(sig_path_for(slot_path), save_hash(serialized))
+    end
     print("saved")
+end
+
+-- the slot the game saves into from now on (save.lua stays the active copy that the game loads)
+function serialize.set_save_slot(slot, prefix)
+    current_slot = slot
+    current_prefix = prefix or ""
 end
 
 function serialize.load_data(options)
@@ -158,13 +203,9 @@ function serialize.load_data(options)
     local content = love.filesystem.read("save.lua")
     if content then
         local expected_sig = love.filesystem.read("save.sig")
-        local actual_sig = save_hash(content)
-        if expected_sig == nil then
-            -- migration path: trust old saves once and create a signature.
-            love.filesystem.write("save.sig", actual_sig)
-            save_tampered = false
-        else
-            save_tampered = expected_sig ~= actual_sig
+        save_tampered = not signature_matches(content, expected_sig)
+        if not save_tampered and (not expected_sig or expected_sig:gsub("%s+$", "") ~= save_hash(content)) then
+            love.filesystem.write("save.sig", save_hash(content)) -- unsigned or signed the old way: sign it now
         end
 
         if save_tampered and not allow_tampered then
@@ -181,10 +222,142 @@ function serialize.set_locked(locked)
     saves_locked = locked == true
 end
 
+-- deletes the save, including the slot it is mirrored into (or the slot would hand the run straight back)
 function serialize.wipe_save()
     love.filesystem.remove("save.lua")
     love.filesystem.remove("save.sig")
+    if current_slot then
+        serialize.delete_slot(current_slot, current_prefix)
+    end
     save_tampered = false
+end
+
+local function slot_path(slot, prefix)
+    return (prefix or "") .. tostring(slot) .. ".lua"
+end
+
+function serialize.save_manually(data, slot, prefix)
+    local path = slot_path(slot, prefix)
+    local data_str = do_serialize(data)
+    love.filesystem.write(path, data_str)
+    love.filesystem.write(sig_path_for(path), save_hash(data_str))
+end
+
+-- returns the slot's data, and whether its signature was wrong (nil when the slot is empty)
+function serialize.load_manually(slot, prefix)
+    local path = slot_path(slot, prefix)
+    local data_str = love.filesystem.read(path)
+    if not data_str then
+        return nil
+    end
+
+    local sig_file = sig_path_for(path)
+    local current_sig = love.filesystem.read(sig_file)
+    local tampered = not signature_matches(data_str, current_sig)
+    if not tampered and (not current_sig or current_sig:gsub("%s+$", "") ~= save_hash(data_str)) then
+        love.filesystem.write(sig_file, save_hash(data_str)) -- a slot dropped in by hand: sign it
+    end
+    return do_deserialize(data_str), tampered
+end
+
+-- removes a slot's file and its signature; true if the slot is gone
+function serialize.delete_slot(slot, prefix)
+    local path = slot_path(slot, prefix)
+    love.filesystem.remove(sig_path_for(path))
+    return love.filesystem.remove(path)
+end
+
+-- Persistent state: a plain table that outlives saves. The menu loads it once and keeps it to itself:
+--   local persistent = serialize.load_persistent(defaults)
+--   persistent.times_beaten = persistent.times_beaten + 1
+--   serialize.save_persistent(persistent)
+-- Wiping or resetting a save never touches it. It lives in persistent.lua next to a keyed signature
+-- (persistent.sig); if the file is edited, it resets to the defaults.
+local PERSISTENT_PATH = "persistent.lua"
+local PERSISTENT_SIG_PATH = "persistent.sig"
+local PERSISTENT_SECRET = SIGNING_SECRET
+
+local function persistent_signature(content)
+    return to_hex(love.data.hash("sha256", PERSISTENT_SECRET .. "|" .. content .. "|" .. PERSISTENT_SECRET:reverse()))
+end
+
+local function is_storable(value)
+    local kind = type(value)
+    if kind == "table" then
+        for k, v in pairs(value) do
+            if (type(k) ~= "string" and type(k) ~= "number") or not is_storable(v) then
+                return false
+            end
+        end
+        return true
+    end
+    return kind == "number" or kind == "string" or kind == "boolean"
+end
+
+-- does persistent.lua on disk match its signature? a missing file counts as fine (nothing to tamper with)
+local function persistent_file_is_intact()
+    if not love.filesystem.getInfo(PERSISTENT_PATH) then
+        return true
+    end
+    local content = love.filesystem.read(PERSISTENT_PATH)
+    local signature = love.filesystem.read(PERSISTENT_SIG_PATH)
+    return content ~= nil and signature == persistent_signature(content)
+end
+
+local function write_persistent(store)
+    local content = do_serialize(store)
+    love.filesystem.write(PERSISTENT_PATH, content)
+    love.filesystem.write(PERSISTENT_SIG_PATH, persistent_signature(content))
+end
+
+local function read_persistent()
+    if not love.filesystem.getInfo(PERSISTENT_PATH) then
+        return {}
+    end
+    if persistent_file_is_intact() then
+        local store = do_deserialize(love.filesystem.read(PERSISTENT_PATH))
+        if type(store) == "table" then
+            return store
+        end
+    end
+    print("persistent state was tampered with - resetting it")
+    write_persistent({})
+    return {}
+end
+
+-- copies any key `store` is missing from `defaults`, so adding a variable to the defaults file is all it takes
+local function fill_defaults(store, defaults)
+    for key, default in pairs(defaults) do
+        if store[key] == nil then
+            if type(default) == "table" then
+                store[key] = {}
+                fill_defaults(store[key], default)
+            else
+                store[key] = default
+            end
+        elseif type(default) == "table" and type(store[key]) == "table" then
+            fill_defaults(store[key], default)
+        end
+    end
+    return store
+end
+
+function serialize.load_persistent(defaults)
+    return fill_defaults(read_persistent(), defaults or {})
+end
+
+function serialize.save_persistent(store)
+    assert(type(store) == "table" and is_storable(store),
+        "persistent state must hold numbers, strings, booleans and tables of those")
+
+    if not persistent_file_is_intact() then
+        -- the file was edited while the game ran: empty the table in place and start over from empty
+        print("persistent state was tampered with - resetting it")
+        for key in pairs(store) do
+            store[key] = nil
+        end
+    end
+    write_persistent(store)
 end
 
 function serialize.was_tampered()

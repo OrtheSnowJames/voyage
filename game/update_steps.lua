@@ -245,6 +245,8 @@ function update_steps.handle_back_to_menu_button(state)
 
         state.system.serialize.save_data(data)
         state.system.gamestate.set(state.system.gametype.MENU)
+        -- the save is on disk; nothing from this run should linger in memory (Play loads the save again)
+        state.system.actions.reset_runtime_state()
         return true
     end
 
