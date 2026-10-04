@@ -12,6 +12,7 @@ local state = {
     ship_name = { text = "" }, -- initialize with text property for suit input
     selected_save = 1,         -- index of the selected save slot
     save_menu_error = "",      -- error message to display in save menu
+    must_choose_slot = false,  -- every slot is full and nothing is loaded: a save has to be picked before playing
     name_submitted = false,  -- track if name has been submitted
     show_error = false,  -- show error if name is empty
     persistent = {},  -- survives saves and wipes; loaded in menu.load and kept private to the menu
@@ -82,6 +83,19 @@ local function check_save_file()
             menu_state = menuState.main_menu
             return true
         end
+    end
+
+    -- three saves and nothing loaded: don't start a blank game over one of them, pick which one to continue
+    local every_slot_full = true
+    for slot = 1, save_slots do
+        if not love.filesystem.getInfo(save_slot_prefix .. slot .. ".lua") then
+            every_slot_full = false
+        end
+    end
+    if every_slot_full then
+        state.must_choose_slot = true
+        state.save_menu_error = ""
+        menu_state = menuState.save_menu
     end
     return false
 end
@@ -237,6 +251,41 @@ local function red_button()
     }
 end
 
+-- picks a save slot: an existing one is loaded into save.lua, an empty one starts a new game
+local function choose_slot(slot)
+    menu.set_save_slot(slot)
+    if not love.filesystem.getInfo(save_slot_prefix .. slot .. ".lua") then
+        -- startup a new save slot: it needs its own ship name
+        state.save_menu_error = ""
+        state.ship_name.text = ""
+        state.name_submitted = false
+        state.must_choose_slot = false
+        menu_state = menuState.startup_menu
+        return
+    end
+
+    -- overwrite save with save slot data
+    local data, tampered = serialize.load_manually(slot, save_slot_prefix)
+    if not data then
+        state.save_menu_error = "Failed to load save slot; data could not be loaded"
+        return
+    end
+
+    -- save_data signs what it writes, so remember an edited slot before it can be laundered
+    if tampered then
+        data.save_file_tampered = true
+    end
+    serialize.save_data(data)
+    state.save_menu_error = tampered and "This save slot was edited" or ""
+    -- the in-game name (read again after every sleep) comes from here
+    state.ship_name.text = tostring(data.name or "")
+    state.name_submitted = true
+    if state.must_choose_slot then
+        state.must_choose_slot = false
+        menu_state = menuState.main_menu
+    end
+end
+
 function menu.update(dt)
     -- update time
     state.time = state.time + dt
@@ -309,7 +358,8 @@ function menu.update(dt)
             handle_quit_button()
         end
     elseif menu_state == menuState.save_menu then
-        if suit.Button("Back", suit.layout:row(button_width, button_height)).hit then
+        -- no way out until a save is picked: playing on would start a blank game over one of the slots
+        if not state.must_choose_slot and suit.Button("Back", suit.layout:row(button_width, button_height)).hit then
             menu_state = menuState.main_menu
         end
         suit.layout:row(button_width, button_spacing) -- spacing
@@ -324,39 +374,15 @@ function menu.update(dt)
                         id = "save_slot_" .. i,
                         color = red_
                     }, suit.layout:row(button_width, button_height)).hit then
-                    s_save_slot = i
-                    -- technically we don't have to do this lol
+                    choose_slot(i)
                 end
             else
                 if suit.Button(slot_label(i), {id = "save_slot_" .. i}, suit.layout:row(button_width, button_height)).hit then
-                    s_save_slot = i
-                    menu.set_save_slot(i)
-                    -- check if save exists
-                    if not love.filesystem.getInfo(save_slot_prefix .. s_save_slot .. ".lua") then
-                        -- startup a new save slot: it needs its own ship name
-                        state.save_menu_error = ""
-                        state.ship_name.text = ""
-                        state.name_submitted = false
-                        menu_state = menuState.startup_menu
-                    else
-                        -- overwrite save with save slot data
-                        local data, tampered = serialize.load_manually(s_save_slot, save_slot_prefix)
-                        if data then
-                            -- save_data signs what it writes, so remember an edited slot before it can be laundered
-                            if tampered then
-                                data.save_file_tampered = true
-                            end
-                            serialize.save_data(data)
-                            state.save_menu_error = tampered and "This save slot was edited" or ""
-                        else
-                            state.save_menu_error = "Failed to load save slot; data could not be loaded"
-                        end
-                    end
+                    choose_slot(i)
                 end
             end
         end
 
-        suit.layout:row(button_width, button_spacing) -- spacing
         if suit.Button("Delete", suit.layout:row(button_width, button_height)).hit then
             -- delete it from filesystem
             local success = serialize.delete_slot(s_save_slot, save_slot_prefix)
